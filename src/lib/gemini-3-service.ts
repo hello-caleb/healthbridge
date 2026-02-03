@@ -25,6 +25,7 @@ const model = genAI.getGenerativeModel({
 export type MedicalTerm = {
     term: string;
     definition: string;
+    timestamp?: string;
 };
 
 export async function detectMedicalTerms(text: string): Promise<MedicalTerm[]> {
@@ -41,13 +42,25 @@ export async function detectMedicalTerms(text: string): Promise<MedicalTerm[]> {
     Return ONLY a JSON array of objects.
   `;
 
-    try {
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const json = response.text();
-        return JSON.parse(json) as MedicalTerm[];
-    } catch (error) {
-        console.error("Gemini 3 Jargon Detection Error:", error);
-        return [];
+    // Retry with exponential backoff for 503 errors
+    const maxRetries = 3;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+            const result = await model.generateContent(prompt);
+            const response = result.response;
+            const json = response.text();
+            return JSON.parse(json) as MedicalTerm[];
+        } catch (error: any) {
+            const is503 = error?.message?.includes('503') || error?.message?.includes('overloaded');
+            if (is503 && attempt < maxRetries - 1) {
+                // Wait before retry: 1s, 2s, 4s
+                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+                console.log(`Gemini 3 API overloaded, retrying (${attempt + 1}/${maxRetries})...`);
+                continue;
+            }
+            console.error("Gemini 3 Jargon Detection Error:", error);
+            return [];
+        }
     }
+    return [];
 }

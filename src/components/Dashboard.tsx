@@ -3,11 +3,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Video, Mic, Globe, Info, Power, Mic as MicIcon, MicOff } from 'lucide-react';
 import { useGeminiClient, MedicalTerm } from '@/hooks/use-gemini-client';
+import { useVideoStream } from '@/hooks/use-video-stream';
 
 export default function Dashboard() {
     const [apiKey, setApiKey] = useState<string>(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
     const { isConnected, isRecording, transcript, medicalTerms, error, connect, disconnect, startAudio } = useGeminiClient({ apiKey });
+    const { videoRef, isActive: isVideoActive, startVideo, stopVideo } = useVideoStream();
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [captionSize, setCaptionSize] = useState<'sm' | 'md' | 'lg'>('md');
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -93,23 +96,43 @@ export default function Dashboard() {
 
                         {/* Patient Feed */}
                         <div className="relative flex min-h-[300px] items-center justify-center rounded-3xl bg-white border-2 border-slate-200 shadow-sm overflow-hidden">
-                            <div className="text-center text-slate-400">
-                                <Mic className="mx-auto mb-3 h-16 w-16 opacity-20" />
-                                <span className="text-xl font-medium text-slate-500">Patient Feed</span>
-                                <p className="text-sm">Local Microphone</p>
-                            </div>
+                            {/* Video Preview or Placeholder */}
+                            {isVideoActive ? (
+                                <video
+                                    ref={videoRef}
+                                    autoPlay
+                                    muted
+                                    playsInline
+                                    className="w-full h-full object-cover"
+                                />
+                            ) : (
+                                <div className="text-center text-slate-400">
+                                    <Mic className="mx-auto mb-3 h-16 w-16 opacity-20" />
+                                    <span className="text-xl font-medium text-slate-500">Patient Feed</span>
+                                    <p className="text-sm">Local Microphone & Camera</p>
+                                </div>
+                            )}
 
                             <div className="absolute top-4 left-4 flex items-center gap-2">
                                 <div className="rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-900 shadow-sm border border-slate-200">You</div>
                                 {isConnected && (
-                                    <button
-                                        onClick={startAudio}
-                                        disabled={isRecording}
-                                        className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold shadow-sm border ${isRecording ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
-                                    >
-                                        {isRecording ? <MicIcon className="h-4 w-4 animate-pulse fill-current" /> : <MicOff className="h-4 w-4" />}
-                                        {isRecording ? 'Mic Active' : 'Enable Mic'}
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={startAudio}
+                                            disabled={isRecording}
+                                            className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold shadow-sm border ${isRecording ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+                                        >
+                                            {isRecording ? <MicIcon className="h-4 w-4 animate-pulse fill-current" /> : <MicOff className="h-4 w-4" />}
+                                            {isRecording ? 'Mic Active' : 'Enable Mic'}
+                                        </button>
+                                        <button
+                                            onClick={isVideoActive ? stopVideo : startVideo}
+                                            className={`flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-bold shadow-sm border ${isVideoActive ? 'bg-green-50 border-green-200 text-green-700' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'}`}
+                                        >
+                                            <Video className="h-4 w-4" />
+                                            {isVideoActive ? 'Camera On' : 'Enable Camera'}
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>
@@ -123,9 +146,15 @@ export default function Dashboard() {
                                 Live Captions
                             </span>
                             {isRecording && <span className="text-red-600 text-xs font-bold animate-pulse px-2 bg-red-50 rounded">LISTENING</span>}
+                            <button
+                                onClick={() => setCaptionSize(s => s === 'sm' ? 'md' : s === 'md' ? 'lg' : 'sm')}
+                                className="text-xs font-bold px-2 py-1 bg-slate-100 hover:bg-slate-200 rounded border border-slate-200 text-slate-600"
+                            >
+                                {captionSize === 'sm' ? 'A' : captionSize === 'md' ? 'A+' : 'A++'}
+                            </button>
                         </h2>
                         <div ref={scrollRef} className="flex-1 overflow-y-auto max-h-[250px] p-2">
-                            <p className="text-2xl leading-relaxed text-slate-800 lg:text-4xl font-semibold whitespace-pre-wrap font-sans" aria-live="polite">
+                            <p className={`leading-relaxed text-slate-800 font-semibold whitespace-pre-wrap font-sans ${captionSize === 'sm' ? 'text-base lg:text-lg' : captionSize === 'md' ? 'text-xl lg:text-2xl' : 'text-2xl lg:text-4xl'}`} aria-live="polite">
                                 {transcript || <span className="text-slate-300 italic">Captions will appear here...</span>}
                             </p>
                         </div>
