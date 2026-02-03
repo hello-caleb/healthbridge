@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, Mic, Globe, Info, Power, Mic as MicIcon, MicOff } from 'lucide-react';
+import { Video, Mic, Globe, Info, Power, Mic as MicIcon, MicOff, ExternalLink } from 'lucide-react';
 import { useGeminiClient, MedicalTerm } from '@/hooks/use-gemini-client';
 import { useVideoStream } from '@/hooks/use-video-stream';
+import { DoctorVideoRoom } from '@/components/DoctorVideoRoom';
 
 export default function Dashboard() {
     const [apiKey, setApiKey] = useState<string>(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
@@ -11,6 +12,12 @@ export default function Dashboard() {
     const { videoRef, isActive: isVideoActive, startVideo, stopVideo } = useVideoStream();
     const scrollRef = useRef<HTMLDivElement>(null);
     const [captionSize, setCaptionSize] = useState<'sm' | 'md' | 'lg'>('md');
+
+    // LiveKit state
+    const [livekitToken, setLivekitToken] = useState<string | null>(null);
+    const [isLivekitConnecting, setIsLivekitConnecting] = useState(false);
+    const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || '';
+    const ROOM_NAME = 'healthbridge-session';
 
     useEffect(() => {
         if (scrollRef.current) {
@@ -23,6 +30,25 @@ export default function Dashboard() {
             disconnect();
         } else {
             connect();
+        }
+    };
+
+    const joinLiveKitRoom = async () => {
+        setIsLivekitConnecting(true);
+        try {
+            const res = await fetch('/api/livekit-token', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ room: ROOM_NAME, identity: 'patient-' + Date.now() }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setLivekitToken(data.token);
+            }
+        } catch (e) {
+            console.error('LiveKit token error:', e);
+        } finally {
+            setIsLivekitConnecting(false);
         }
     };
 
@@ -83,14 +109,35 @@ export default function Dashboard() {
                     <div className="grid flex-1 grid-cols-1 gap-6 md:grid-cols-2">
                         {/* Doctor Feed */}
                         <div className="relative flex min-h-[300px] items-center justify-center rounded-3xl bg-white border-2 border-slate-200 shadow-sm overflow-hidden">
-                            {/* Placeholder for real video */}
-                            <div className="text-center text-slate-400">
-                                <Video className="mx-auto mb-3 h-16 w-16 opacity-20" />
-                                <span className="text-xl font-medium text-slate-500">Doctor Feed</span>
-                                <p className="text-sm">Waiting for connection...</p>
-                            </div>
-                            <div className="absolute top-4 left-4 rounded-lg bg-blue-100 px-3 py-1.5 text-sm font-bold text-blue-900 shadow-sm">
-                                Doctor
+                            {livekitToken ? (
+                                <DoctorVideoRoom
+                                    token={livekitToken}
+                                    serverUrl={LIVEKIT_URL}
+                                    onDisconnect={() => setLivekitToken(null)}
+                                />
+                            ) : (
+                                <div className="text-center text-slate-400">
+                                    <Video className="mx-auto mb-3 h-16 w-16 opacity-20" />
+                                    <span className="text-xl font-medium text-slate-500">Doctor Feed</span>
+                                    <p className="text-sm mb-4">Connect to see Doctor video</p>
+                                    <button
+                                        onClick={joinLiveKitRoom}
+                                        disabled={isLivekitConnecting}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium text-sm disabled:opacity-50"
+                                    >
+                                        {isLivekitConnecting ? 'Connecting...' : 'Join Video Room'}
+                                    </button>
+                                </div>
+                            )}
+                            <div className="absolute top-4 left-4 flex items-center gap-2">
+                                <div className="rounded-lg bg-blue-100 px-3 py-1.5 text-sm font-bold text-blue-900 shadow-sm">Doctor</div>
+                                <a
+                                    href="/doctor"
+                                    target="_blank"
+                                    className="flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
+                                >
+                                    <ExternalLink className="h-3 w-3" /> Open Doctor View
+                                </a>
                             </div>
                         </div>
 
