@@ -10,7 +10,11 @@
   },
   "dependencies": {
     "@google/genai": "^1.39.0",
+    "@google/generative-ai": "^0.24.1",
+    "@livekit/components-react": "^2.9.19",
+    "@livekit/components-styles": "^1.2.0",
     "livekit-client": "^2.17.0",
+    "livekit-server-sdk": "^2.15.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "react": "19.2.3",
