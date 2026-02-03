@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Video, Mic, Globe, Info, Power, Mic as MicIcon, MicOff } from 'lucide-react';
-import { useGeminiClient } from '@/hooks/use-gemini-client';
+import { useGeminiClient, MedicalTerm } from '@/hooks/use-gemini-client';
 
 export default function Dashboard() {
     const [apiKey, setApiKey] = useState<string>(process.env.NEXT_PUBLIC_GEMINI_API_KEY || "");
-    const { isConnected, isRecording, transcript, connect, disconnect, startAudio } = useGeminiClient({ apiKey });
+    const { isConnected, isRecording, transcript, medicalTerms, error, connect, disconnect, startAudio } = useGeminiClient({ apiKey });
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -26,31 +26,50 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-slate-50 text-slate-900 p-4 font-sans">
             {/* Header */}
-            <header className="mb-4 flex items-center justify-between border-b border-slate-200 pb-4">
-                <h1 className="text-3xl font-extrabold tracking-tight text-blue-800">HealthBridge</h1>
-                <div className="flex items-center gap-4">
-                    <div className={`flex items-center gap-2 rounded-full px-4 py-1.5 border ${isConnected ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}`}>
-                        <div className={`h-3 w-3 rounded-full ${isConnected ? 'bg-green-600' : 'bg-red-600 animate-pulse'}`} />
-                        <span className="text-sm font-bold">{isConnected ? 'Connected' : 'Disconnected'}</span>
+            <header className="mb-4 flex flex-col gap-4 border-b border-slate-200 pb-4">
+                <div className="flex items-center justify-between">
+                    <h1 className="text-3xl font-extrabold tracking-tight text-blue-800">HealthBridge</h1>
+                    <div className="flex items-center gap-4">
+                        <div className={`flex items-center gap-2 rounded-full px-4 py-1.5 border ${isConnected ? 'bg-green-100 text-green-800 border-green-200' : 'bg-red-100 text-red-800 border-red-200'}`}>
+                            <div className={`h-3 w-3 rounded-full ${isConnected ? 'bg-green-600' : 'bg-red-600 animate-pulse'}`} />
+                            <span className="text-sm font-bold">{isConnected ? 'Connected' : 'Disconnected'}</span>
+                        </div>
+
+                        <input
+                            type="password"
+                            placeholder="API Key"
+                            value={apiKey}
+                            onChange={(e) => setApiKey(e.target.value)}
+                            className="rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-none placeholder:text-slate-400"
+                            suppressHydrationWarning
+                        />
+
+                        <button
+                            onClick={handleToggleConnect}
+                            className={`flex items-center gap-2 rounded-full px-6 py-2 font-bold shadow-sm transition-all text-white ${isConnected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-700 hover:bg-blue-800'}`}
+                        >
+                            <Power className="h-4 w-4" />
+                            {isConnected ? 'End Session' : 'Start Session'}
+                        </button>
                     </div>
-
-                    <input
-                        type="password"
-                        placeholder="API Key"
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        className="rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-none placeholder:text-slate-400"
-                        suppressHydrationWarning
-                    />
-
-                    <button
-                        onClick={handleToggleConnect}
-                        className={`flex items-center gap-2 rounded-full px-6 py-2 font-bold shadow-sm transition-all text-white ${isConnected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-700 hover:bg-blue-800'}`}
-                    >
-                        <Power className="h-4 w-4" />
-                        {isConnected ? 'End Session' : 'Start Session'}
-                    </button>
                 </div>
+
+                {error && (
+                    <div className="rounded-lg bg-red-50 border-l-4 border-red-500 p-4 animate-in fade-in slide-in-from-top-2">
+                        <div className="flex">
+                            <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm text-red-700 font-medium">
+                                    {error}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </header>
 
             {/* Main Grid */}
@@ -123,16 +142,23 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2">
-                        {/* Mock Item */}
-                        <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100 hover:border-blue-200 transition-colors">
-                            <div className="mb-2 flex items-baseline justify-between">
-                                <span className="font-bold text-blue-700 text-lg">Hypertension</span>
-                                <span className="text-xs font-bold text-slate-400">10:42 AM</span>
+                        {medicalTerms.length === 0 ? (
+                            <div className="text-center text-slate-400 mt-10">
+                                <p className="text-sm">No complex terms detected yet.</p>
                             </div>
-                            <p className="text-base font-medium text-slate-700 leading-snug">
-                                High blood pressure. The force of blood against artery walls is too high.
-                            </p>
-                        </div>
+                        ) : (
+                            medicalTerms.map((item, index) => (
+                                <div key={index} className="rounded-2xl bg-slate-50 p-4 border border-slate-100 hover:border-blue-200 transition-colors animate-in slide-in-from-right fade-in duration-300">
+                                    <div className="mb-2 flex items-baseline justify-between">
+                                        <span className="font-bold text-blue-700 text-lg capitalize">{item.term}</span>
+                                        <span className="text-xs font-bold text-slate-400">{item.timestamp}</span>
+                                    </div>
+                                    <p className="text-base font-medium text-slate-700 leading-snug">
+                                        {item.definition}
+                                    </p>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </aside>
             </main>

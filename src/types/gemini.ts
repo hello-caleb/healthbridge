@@ -7,6 +7,14 @@ export type GeminiContent = {
     parts: GeminiPart[];
 };
 
+export type GeminiTool = {
+    functionDeclarations: {
+        name: string;
+        description: string;
+        parameters?: any;
+    }[];
+};
+
 export type GeminiServerEvent =
     | { serverContent: { modelTurn: { parts: GeminiPart[] }; turnComplete?: boolean } }
     | { toolCall: { functionCalls: { name: string; args: any }[] } }
@@ -26,6 +34,10 @@ export type GeminiClientEvent =
                     };
                 };
             };
+            systemInstruction?: {
+                parts: GeminiPart[];
+            };
+            tools?: GeminiTool[];
         };
     }
     | {
@@ -44,4 +56,12 @@ export type GeminiClientEvent =
                 data: string; // Base64
             }[];
         };
+    }
+    | {
+        toolResponse: {
+            functionResponses: {
+                name: string;
+                response: any;
+            }[];
+        }
     };
