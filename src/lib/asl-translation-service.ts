@@ -4,10 +4,62 @@ import { HandFrame } from "@/hooks/use-hand-landmarker";
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// Use Gemini Pro Vision for image analysis
-const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-});
+/**
+ * ASL Translation Configuration
+ * Adjust these settings to optimize accuracy vs. speed tradeoff
+ */
+export interface ASLConfig {
+    /** Number of frames to send to Gemini (5, 8, 10, or 15) */
+    maxFrames: 5 | 8 | 10 | 15;
+    /** Gemini model to use */
+    model: 'gemini-2.0-flash' | 'gemini-2.5-flash' | 'gemini-2.5-pro';
+    /** JPEG quality (0-1) for frame compression */
+    imageQuality: number;
+    /** Enable verbose logging */
+    verbose: boolean;
+}
+
+/** Default configuration - optimized for speed */
+export const DEFAULT_ASL_CONFIG: ASLConfig = {
+    maxFrames: 8, // Increased from 5 for better accuracy
+    model: 'gemini-2.0-flash',
+    imageQuality: 0.7,
+    verbose: false,
+};
+
+/** High accuracy configuration - slower but more precise */
+export const ACCURACY_ASL_CONFIG: ASLConfig = {
+    maxFrames: 15,
+    model: 'gemini-2.5-flash',
+    imageQuality: 0.85,
+    verbose: true,
+};
+
+/** Fast configuration - for real-time feedback */
+export const FAST_ASL_CONFIG: ASLConfig = {
+    maxFrames: 5,
+    model: 'gemini-2.0-flash',
+    imageQuality: 0.6,
+    verbose: false,
+};
+
+// Current active configuration - can be changed at runtime
+let currentConfig: ASLConfig = { ...DEFAULT_ASL_CONFIG };
+
+/**
+ * Update the active ASL configuration
+ */
+export function setASLConfig(config: Partial<ASLConfig>): void {
+    currentConfig = { ...currentConfig, ...config };
+    console.log('🔧 ASL Config updated:', currentConfig);
+}
+
+/**
+ * Get the current active configuration
+ */
+export function getASLConfig(): ASLConfig {
+    return { ...currentConfig };
+}
 
 // System prompt for ASL interpretation
 const ASL_SYSTEM_PROMPT = `You are an ASL (American Sign Language) interpreter assistant for a healthcare communication app.
@@ -30,30 +82,51 @@ export interface ASLTranslationResult {
     translation: string;
     confidence: 'high' | 'medium' | 'low' | 'unclear';
     timestamp: string;
+    /** Latency in milliseconds */
+    latencyMs?: number;
+    /** Number of frames used */
+    framesUsed?: number;
+    /** Model used for translation */
+    modelUsed?: string;
 }
 
 /**
  * Translate ASL signs from captured video frames using Gemini Vision
+ * @param frames Array of captured hand frames
+ * @param configOverride Optional config to override current settings (for A/B testing)
  */
-export async function translateASLFrames(frames: HandFrame[]): Promise<ASLTranslationResult> {
+export async function translateASLFrames(
+    frames: HandFrame[],
+    configOverride?: Partial<ASLConfig>
+): Promise<ASLTranslationResult> {
+    const startTime = Date.now();
+    const config = { ...currentConfig, ...configOverride };
+
+    // Create model with specified configuration
+    const model = genAI.getGenerativeModel({
+        model: config.model,
+    });
+
     if (!frames || frames.length === 0) {
         return {
             translation: '[no frames]',
             confidence: 'unclear',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            latencyMs: Date.now() - startTime,
+            framesUsed: 0,
+            modelUsed: config.model,
         };
     }
 
     try {
-        // Select key frames (first, middle, last) to send to Gemini
-        // This reduces API payload while capturing the sign's progression
-        const keyFrameIndices = selectKeyFrames(frames.length, 5);
+        // Select key frames based on configuration
+        const keyFrameIndices = selectKeyFrames(frames.length, config.maxFrames);
         const keyFrames = keyFrameIndices.map(i => frames[i]);
 
         // Prepare image parts for Gemini
-        const imageParts = keyFrames.map((frame, index) => ({
+        const imageParts = keyFrames.map((frame) => ({
             inlineData: {
-                mimeType: "image/jpeg",
+                mimeType: "image/jpeg" as const,
                 data: frame.imageData.replace(/^data:image\/jpeg;base64,/, ''),
             },
         }));
@@ -73,6 +146,7 @@ What ASL sign or phrase is being made? Remember to respond with just the English
 
         const response = result.response;
         const text = response.text().trim();
+        const latencyMs = Date.now() - startTime;
 
         // Determine confidence based on response
         let confidence: 'high' | 'medium' | 'low' | 'unclear' = 'medium';
@@ -82,15 +156,21 @@ What ASL sign or phrase is being made? Remember to respond with just the English
             confidence = 'high'; // Short, confident responses
         }
 
-        console.log(`🤟 ASL Translation: "${text}" (confidence: ${confidence})`);
+        if (config.verbose) {
+            console.log(`🤟 ASL Translation: "${text}" (confidence: ${confidence}, ${keyFrames.length} frames, ${latencyMs}ms, ${config.model})`);
+        }
 
         return {
             translation: text,
             confidence,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            latencyMs,
+            framesUsed: keyFrames.length,
+            modelUsed: config.model,
         };
 
     } catch (error: any) {
+        const latencyMs = Date.now() - startTime;
         console.error('❌ ASL Translation error:', error);
 
         // Handle rate limiting
@@ -99,6 +179,9 @@ What ASL sign or phrase is being made? Remember to respond with just the English
                 translation: '[rate limited - try again]',
                 confidence: 'unclear',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                latencyMs,
+                framesUsed: 0,
+                modelUsed: config.model,
             };
         }
 
@@ -106,6 +189,9 @@ What ASL sign or phrase is being made? Remember to respond with just the English
             translation: '[translation error]',
             confidence: 'unclear',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            latencyMs,
+            framesUsed: 0,
+            modelUsed: config.model,
         };
     }
 }
