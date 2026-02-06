@@ -1,0 +1,346 @@
+{
+    "version": "1.0.0",
+    "created": "2026-02-06",
+    "description": "Ground truth labels for ASL medical sign testing",
+    "sources": {
+        "wlasl": "https://dxli94.github.io/WLASL/",
+        "asl_lex": "https://asl-lex.org/",
+        "how2sign": "https://how2sign.github.io/"
+    },
+    "signs": [
+        {
+            "id": "sign_001",
+            "sign": "pain",
+            "category": "symptom",
+            "priority": "high",
+            "expected_translation": "pain",
+            "alternate_translations": [
+                "hurt",
+                "ache",
+                "painful"
+            ],
+            "video_file": "pain_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "PAIN",
+            "notes": "Twisting motion near affected area, facial expression shows discomfort"
+        },
+        {
+            "id": "sign_002",
+            "sign": "help",
+            "category": "request",
+            "priority": "high",
+            "expected_translation": "help",
+            "alternate_translations": [
+                "assist",
+                "need help"
+            ],
+            "video_file": "help_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "HELP",
+            "notes": "Flat hand placed on fist, lift upward"
+        },
+        {
+            "id": "sign_003",
+            "sign": "sick",
+            "category": "condition",
+            "priority": "high",
+            "expected_translation": "sick",
+            "alternate_translations": [
+                "ill",
+                "unwell",
+                "not feeling well"
+            ],
+            "video_file": "sick_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "SICK",
+            "notes": "Middle finger touches forehead and stomach alternately"
+        },
+        {
+            "id": "sign_004",
+            "sign": "doctor",
+            "category": "role",
+            "priority": "high",
+            "expected_translation": "doctor",
+            "alternate_translations": [
+                "physician",
+                "MD"
+            ],
+            "video_file": "doctor_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "DOCTOR",
+            "notes": "D-handshape tapped on wrist (pulse check motion)"
+        },
+        {
+            "id": "sign_005",
+            "sign": "medicine",
+            "category": "treatment",
+            "priority": "high",
+            "expected_translation": "medicine",
+            "alternate_translations": [
+                "medication",
+                "drug",
+                "pill"
+            ],
+            "video_file": "medicine_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "MEDICINE",
+            "notes": "Middle finger circles in palm"
+        },
+        {
+            "id": "sign_006",
+            "sign": "heart",
+            "category": "body_part",
+            "priority": "high",
+            "expected_translation": "heart",
+            "alternate_translations": [
+                "cardiac"
+            ],
+            "video_file": "heart_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "HEART",
+            "notes": "Middle finger taps chest over heart location"
+        },
+        {
+            "id": "sign_007",
+            "sign": "chest",
+            "category": "body_part",
+            "priority": "high",
+            "expected_translation": "chest",
+            "alternate_translations": [
+                "breast",
+                "torso"
+            ],
+            "video_file": "chest_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "CHEST",
+            "notes": "Flat hand rubs chest area"
+        },
+        {
+            "id": "sign_008",
+            "sign": "head",
+            "category": "body_part",
+            "priority": "high",
+            "expected_translation": "head",
+            "alternate_translations": [
+                "headache"
+            ],
+            "video_file": "head_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "HEAD",
+            "notes": "Bent B-hand touches side of head"
+        },
+        {
+            "id": "sign_009",
+            "sign": "stomach",
+            "category": "body_part",
+            "priority": "high",
+            "expected_translation": "stomach",
+            "alternate_translations": [
+                "belly",
+                "abdomen",
+                "tummy"
+            ],
+            "video_file": "stomach_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "STOMACH",
+            "notes": "Flat hand pats stomach area"
+        },
+        {
+            "id": "sign_010",
+            "sign": "dizzy",
+            "category": "symptom",
+            "priority": "medium",
+            "expected_translation": "dizzy",
+            "alternate_translations": [
+                "lightheaded",
+                "vertigo",
+                "faint"
+            ],
+            "video_file": "dizzy_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "DIZZY",
+            "notes": "Claw hand circles near head with confused expression"
+        },
+        {
+            "id": "sign_011",
+            "sign": "yes",
+            "category": "response",
+            "priority": "high",
+            "expected_translation": "yes",
+            "alternate_translations": [
+                "correct",
+                "affirmative"
+            ],
+            "video_file": "yes_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "YES",
+            "notes": "S-hand nods like a head"
+        },
+        {
+            "id": "sign_012",
+            "sign": "no",
+            "category": "response",
+            "priority": "high",
+            "expected_translation": "no",
+            "alternate_translations": [
+                "negative",
+                "not"
+            ],
+            "video_file": "no_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "NO",
+            "notes": "Index and middle finger close to thumb"
+        },
+        {
+            "id": "sign_013",
+            "sign": "more",
+            "category": "modifier",
+            "priority": "medium",
+            "expected_translation": "more",
+            "alternate_translations": [
+                "additional",
+                "again"
+            ],
+            "video_file": "more_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "MORE",
+            "notes": "Flat O hands tap together at fingertips"
+        },
+        {
+            "id": "sign_014",
+            "sign": "emergency",
+            "category": "urgency",
+            "priority": "high",
+            "expected_translation": "emergency",
+            "alternate_translations": [
+                "urgent",
+                "critical"
+            ],
+            "video_file": "emergency_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "EMERGENCY",
+            "notes": "E handshape shaken side to side"
+        },
+        {
+            "id": "sign_015",
+            "sign": "allergic",
+            "category": "condition",
+            "priority": "high",
+            "expected_translation": "allergic",
+            "alternate_translations": [
+                "allergy",
+                "allergies"
+            ],
+            "video_file": "allergic_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "ALLERGIC",
+            "notes": "Index finger touches nose then moves away with negative shake"
+        },
+        {
+            "id": "sign_016",
+            "sign": "breathe",
+            "category": "symptom",
+            "priority": "high",
+            "expected_translation": "breathe",
+            "alternate_translations": [
+                "breathing",
+                "breath",
+                "can't breathe"
+            ],
+            "video_file": "breathe_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "BREATHE",
+            "notes": "Hands on chest move in and out with breathing motion"
+        },
+        {
+            "id": "sign_017",
+            "sign": "nausea",
+            "category": "symptom",
+            "priority": "medium",
+            "expected_translation": "nausea",
+            "alternate_translations": [
+                "nauseous",
+                "queasy",
+                "sick to stomach"
+            ],
+            "video_file": "nausea_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "NAUSEA",
+            "notes": "Claw hand circles over stomach with uncomfortable expression"
+        },
+        {
+            "id": "sign_018",
+            "sign": "tired",
+            "category": "symptom",
+            "priority": "medium",
+            "expected_translation": "tired",
+            "alternate_translations": [
+                "fatigued",
+                "exhausted",
+                "weary"
+            ],
+            "video_file": "tired_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "TIRED",
+            "notes": "Bent hands touch chest and fall downward"
+        },
+        {
+            "id": "sign_019",
+            "sign": "when",
+            "category": "question",
+            "priority": "medium",
+            "expected_translation": "when",
+            "alternate_translations": [
+                "what time",
+                "how long"
+            ],
+            "video_file": "when_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "WHEN",
+            "notes": "Index finger circles then touches other index finger"
+        },
+        {
+            "id": "sign_020",
+            "sign": "where",
+            "category": "question",
+            "priority": "medium",
+            "expected_translation": "where",
+            "alternate_translations": [
+                "location",
+                "place"
+            ],
+            "video_file": "where_01.mp4",
+            "source": "wlasl",
+            "wlasl_gloss": "WHERE",
+            "notes": "Index finger wags side to side with questioning expression"
+        }
+    ],
+    "test_config": {
+        "total_signs": 20,
+        "high_priority": 14,
+        "medium_priority": 6,
+        "categories": {
+            "symptom": 5,
+            "body_part": 4,
+            "response": 2,
+            "condition": 2,
+            "request": 1,
+            "role": 1,
+            "treatment": 1,
+            "urgency": 1,
+            "modifier": 1,
+            "question": 2
+        },
+        "accuracy_thresholds": {
+            "minimum_acceptable": 0.60,
+            "target": 0.80,
+            "excellent": 0.90
+        },
+        "scoring": {
+            "exact_match": 1.0,
+            "alternate_match": 0.8,
+            "partial_match": 0.5,
+            "no_match": 0.0
+        }
+    }
+}
