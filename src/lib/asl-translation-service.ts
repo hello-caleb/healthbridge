@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { HandFrame } from "@/hooks/use-hand-landmarker";
+import { selectKeyFramesAdaptive, getSelectedFrames } from "./adaptive-frame-select";
 
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -17,30 +18,32 @@ export interface ASLConfig {
     imageQuality: number;
     /** Enable verbose logging */
     verbose: boolean;
+    /** Use adaptive (motion-based) frame selection instead of even distribution */
+    useAdaptiveSelection: boolean;
 }
 
-/** Default configuration - optimized for speed */
 export const DEFAULT_ASL_CONFIG: ASLConfig = {
     maxFrames: 8, // Increased from 5 for better accuracy
     model: 'gemini-2.0-flash',
     imageQuality: 0.7,
     verbose: false,
+    useAdaptiveSelection: true, // Use motion-based frame selection
 };
 
-/** High accuracy configuration - slower but more precise */
 export const ACCURACY_ASL_CONFIG: ASLConfig = {
     maxFrames: 15,
     model: 'gemini-2.5-flash',
     imageQuality: 0.85,
     verbose: true,
+    useAdaptiveSelection: true,
 };
 
-/** Fast configuration - for real-time feedback */
 export const FAST_ASL_CONFIG: ASLConfig = {
     maxFrames: 5,
     model: 'gemini-2.0-flash',
     imageQuality: 0.6,
     verbose: false,
+    useAdaptiveSelection: false, // Even distribution for speed
 };
 
 // Current active configuration - can be changed at runtime
@@ -119,9 +122,17 @@ export async function translateASLFrames(
     }
 
     try {
-        // Select key frames based on configuration
-        const keyFrameIndices = selectKeyFrames(frames.length, config.maxFrames);
-        const keyFrames = keyFrameIndices.map(i => frames[i]);
+        // Select key frames using adaptive or even distribution
+        const keyFrameIndices = selectKeyFramesAdaptive(frames, {
+            maxFrames: config.maxFrames,
+            useAdaptiveSelection: config.useAdaptiveSelection,
+        });
+        const keyFrames = getSelectedFrames(frames, keyFrameIndices);
+
+        if (config.verbose) {
+            console.log(`📸 Selected ${keyFrameIndices.length} frames from ${frames.length} total`);
+            console.log(`   Indices: [${keyFrameIndices.join(', ')}]`);
+        }
 
         // Prepare image parts for Gemini
         const imageParts = keyFrames.map((frame) => ({
