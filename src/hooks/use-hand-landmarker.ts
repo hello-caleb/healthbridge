@@ -30,6 +30,15 @@ const VELOCITY_CONFIG = {
     preparingTimeout: 300,     // Ms in preparing before auto-transitioning to signing
 };
 
+// Landmark smoothing configuration (reduces jitter)
+const SMOOTHING_CONFIG = {
+    alpha: 0.3,                // EMA smoothing factor (0-1): lower = more smoothing, higher = more responsive
+    minAlpha: 0.1,             // Minimum alpha (maximum smoothing)
+    maxAlpha: 0.5,             // Maximum alpha (minimum smoothing)
+    velocityAdaptive: true,    // Adjust alpha based on velocity (fast movements = less smoothing)
+    smoothingEnabled: true,    // Master toggle for smoothing
+};
+
 /**
  * Sign detection state machine states
  * idle: No hands detected, waiting
@@ -51,12 +60,27 @@ interface LandmarkPosition {
     z: number;
 }
 
+interface SmoothedLandmark {
+    x: number;
+    y: number;
+    z: number;
+}
+
 interface UseHandLandmarkerProps {
     onSignComplete?: (frames: HandFrame[]) => void;
     onStateChange?: (state: SignState) => void;
+    /** Smoothing factor override (0-1): lower = more smoothing */
+    smoothingFactor?: number;
+    /** Disable smoothing entirely */
+    disableSmoothing?: boolean;
 }
 
-export function useHandLandmarker({ onSignComplete, onStateChange }: UseHandLandmarkerProps = {}) {
+export function useHandLandmarker({
+    onSignComplete,
+    onStateChange,
+    smoothingFactor,
+    disableSmoothing = false,
+}: UseHandLandmarkerProps = {}) {
     // State
     const [isInitialized, setIsInitialized] = useState(false);
     const [isDetecting, setIsDetecting] = useState(false);
@@ -85,6 +109,10 @@ export function useHandLandmarker({ onSignComplete, onStateChange }: UseHandLand
     const stateEnterTimeRef = useRef<number>(0);
     const landmarkHistoryRef = useRef<LandmarkPosition[][]>([]);
     const preparingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Smoothing refs - stores smoothed landmark positions for each hand
+    // [handIndex][landmarkIndex] = SmoothedLandmark
+    const smoothedLandmarksRef = useRef<SmoothedLandmark[][]>([]);
 
     // Initialize MediaPipe HandLandmarker
     const initialize = useCallback(async () => {
@@ -160,6 +188,80 @@ export function useHandLandmarker({ onSignComplete, onStateChange }: UseHandLand
         }
     }, [initialize]);
 
+    /**
+     * Apply exponential moving average (EMA) smoothing to landmarks
+     * This reduces jitter from MediaPipe detection while maintaining responsiveness
+     */
+    const smoothLandmarks = (results: HandLandmarkerResult): HandLandmarkerResult => {
+        // Skip smoothing if disabled
+        if (disableSmoothing || !SMOOTHING_CONFIG.smoothingEnabled) {
+            return results;
+        }
+
+        if (!results.landmarks || results.landmarks.length === 0) {
+            smoothedLandmarksRef.current = [];
+            return results;
+        }
+
+        // Determine alpha (smoothing factor)
+        let alpha = smoothingFactor ?? SMOOTHING_CONFIG.alpha;
+
+        // Apply velocity-adaptive smoothing if enabled
+        if (SMOOTHING_CONFIG.velocityAdaptive && currentVelocity > 0) {
+            // Higher velocity = higher alpha (less smoothing, more responsive)
+            // Lower velocity = lower alpha (more smoothing, reduces jitter)
+            const velocityNormalized = Math.min(currentVelocity / VELOCITY_CONFIG.movementThreshold, 1);
+            alpha = SMOOTHING_CONFIG.minAlpha +
+                (SMOOTHING_CONFIG.maxAlpha - SMOOTHING_CONFIG.minAlpha) * velocityNormalized;
+        }
+
+        // Ensure alpha is within bounds
+        alpha = Math.max(SMOOTHING_CONFIG.minAlpha, Math.min(SMOOTHING_CONFIG.maxAlpha, alpha));
+
+        // Process each hand's landmarks
+        const smoothedResults: HandLandmarkerResult = {
+            ...results,
+            landmarks: results.landmarks.map((handLandmarks, handIndex) => {
+                // Initialize smoothed landmarks for this hand if needed
+                if (!smoothedLandmarksRef.current[handIndex]) {
+                    smoothedLandmarksRef.current[handIndex] = handLandmarks.map(lm => ({
+                        x: lm.x,
+                        y: lm.y,
+                        z: lm.z,
+                    }));
+                    return handLandmarks; // First frame - no smoothing possible
+                }
+
+                // Apply EMA: smoothed = alpha * current + (1 - alpha) * previous
+                const smoothedHand = handLandmarks.map((landmark, landmarkIndex) => {
+                    const prevSmoothed = smoothedLandmarksRef.current[handIndex][landmarkIndex];
+
+                    const smoothedX = alpha * landmark.x + (1 - alpha) * prevSmoothed.x;
+                    const smoothedY = alpha * landmark.y + (1 - alpha) * prevSmoothed.y;
+                    const smoothedZ = alpha * landmark.z + (1 - alpha) * prevSmoothed.z;
+
+                    // Update stored smoothed position
+                    smoothedLandmarksRef.current[handIndex][landmarkIndex] = {
+                        x: smoothedX,
+                        y: smoothedY,
+                        z: smoothedZ,
+                    };
+
+                    return {
+                        ...landmark,
+                        x: smoothedX,
+                        y: smoothedY,
+                        z: smoothedZ,
+                    };
+                });
+
+                return smoothedHand;
+            }),
+        };
+
+        return smoothedResults;
+    };
+
     // Detection loop
     const detectHands = useCallback(() => {
         if (!handLandmarkerRef.current || !videoRef.current || !canvasRef.current) {
@@ -178,7 +280,11 @@ export function useHandLandmarker({ onSignComplete, onStateChange }: UseHandLand
         const now = performance.now();
 
         // Run hand detection
-        const results = handLandmarkerRef.current.detectForVideo(video, now);
+        const rawResults = handLandmarkerRef.current.detectForVideo(video, now);
+
+        // Apply landmark smoothing to reduce jitter
+        const results = smoothLandmarks(rawResults);
+
         const hasHands = results.landmarks && results.landmarks.length > 0;
 
         setHandsDetected(hasHands);
@@ -186,7 +292,7 @@ export function useHandLandmarker({ onSignComplete, onStateChange }: UseHandLand
         // Draw video frame to canvas
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Draw hand landmarks overlay
+        // Draw hand landmarks overlay (uses smoothed landmarks)
         if (hasHands && results.landmarks) {
             drawLandmarks(ctx, results.landmarks);
         }
@@ -196,7 +302,7 @@ export function useHandLandmarker({ onSignComplete, onStateChange }: UseHandLand
 
         // Continue loop
         animationFrameRef.current = requestAnimationFrame(detectHands);
-    }, []);
+    }, [disableSmoothing, smoothingFactor, currentVelocity]);
 
     // Draw hand landmarks on canvas
     const drawLandmarks = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
