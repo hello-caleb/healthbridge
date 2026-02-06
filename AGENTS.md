@@ -8,6 +8,7 @@ HealthBridge is a real-time healthcare communication assistant for Deaf/Hard-of-
 - **AI Engine:** Gemini 3 API (`@google/genai`)
 - **Real-time Audio:** LiveKit (WebSocket)
 - **Audio Specs:** 16-bit PCM, 16kHz, mono (Required for Gemini Live API)
+- **ASL Recognition:** MediaPipe HandLandmarker + Gemini Vision
 
 ## 3. Core "Skills" & Rules
 - **Diarization:** Separate speaker roles as `[Doctor]` and `[Patient]` using acoustic cues.
@@ -33,16 +34,24 @@ HealthBridge is a real-time healthcare communication assistant for Deaf/Hard-of-
   - [x] Integrate `downsampler.ts` with Microphone input.
   - [x] Verify audio packets are 16kHz PCM16.
 
-- [ ] **Phase 3: Intelligence & Video**
+- [x] **Phase 3: Intelligence & Video**
   - [x] Implement Jargon Detection (Gemini System Instructions).
-  - [ ] Connect Video Feeds (Local/Cloud).
+  - [x] Build Diarization Logic (Doctor vs. Patient speaker lanes).
+  - [x] Connect Video Feeds (LiveKit integration).
 
-- [ ] **Phase 4: Production Hardening**
-  - Error Boundaries & Reconnection Logic.
-  - Session Timeouts & Security Headers.
-  - Deployment Config (Vercel/Cloud Run).
+- [x] **Phase 4: Production Hardening**
+  - [x] Error Boundaries & Reconnection Logic.
+  - [x] Session Timeouts & Security Headers.
+  - [x] Deployment Config (Vercel).
 
-- [ ] **Phase 5: Post-Consultation**
+- [x] **Phase 5: ASL Recognition Pipeline**
+  - [x] MediaPipe HandLandmarker integration (`use-hand-landmarker.ts`).
+  - [x] Gemini Vision for ASL → English translation (`asl-translation-service.ts`).
+  - [x] ASL Input component with hand landmark overlay (`ASLInput.tsx`).
+  - [x] Input mode toggle (Audio/ASL) in CinematicVideoRoom.
+  - [x] ASL translations displayed in Live Transcription view.
+
+- [ ] **Phase 6: Post-Consultation** *(Stretch)*
   - Generate Visit Summaries (PDF/Text).
   - Export to EHR (FHIR standard placeholder).
   - Patient History & Session Logs.
