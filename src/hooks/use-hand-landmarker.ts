@@ -18,9 +18,26 @@ const DETECTION_CONFIG = {
 // Time thresholds for sign detection
 const SIGN_THRESHOLDS = {
     minSignDuration: 500,      // Minimum ms hands must be visible
-    signCompleteDelay: 800,    // Ms of no hands before sign is "complete"
+    signCompleteDelay: 600,    // Ms of stillness before sign is "complete" (reduced from 800)
     frameInterval: 100,        // Ms between frame captures for Gemini
 };
+
+// Velocity thresholds for motion detection
+const VELOCITY_CONFIG = {
+    movementThreshold: 0.02,   // Normalized units per frame (significant movement)
+    stillnessThreshold: 0.005, // Normalized units per frame (considered still)
+    historyLength: 5,          // Number of frames to average velocity over
+    preparingTimeout: 300,     // Ms in preparing before auto-transitioning to signing
+};
+
+/**
+ * Sign detection state machine states
+ * idle: No hands detected, waiting
+ * preparing: Hands detected, waiting for movement
+ * signing: Active signing detected (hands moving)
+ * completing: Movement stopped, waiting for stillness confirmation
+ */
+export type SignState = 'idle' | 'preparing' | 'signing' | 'completing';
 
 export interface HandFrame {
     timestamp: number;
@@ -28,16 +45,25 @@ export interface HandFrame {
     landmarks: HandLandmarkerResult | null;
 }
 
-interface UseHandLandmarkerProps {
-    onSignComplete?: (frames: HandFrame[]) => void;
+interface LandmarkPosition {
+    x: number;
+    y: number;
+    z: number;
 }
 
-export function useHandLandmarker({ onSignComplete }: UseHandLandmarkerProps = {}) {
+interface UseHandLandmarkerProps {
+    onSignComplete?: (frames: HandFrame[]) => void;
+    onStateChange?: (state: SignState) => void;
+}
+
+export function useHandLandmarker({ onSignComplete, onStateChange }: UseHandLandmarkerProps = {}) {
     // State
     const [isInitialized, setIsInitialized] = useState(false);
     const [isDetecting, setIsDetecting] = useState(false);
     const [handsDetected, setHandsDetected] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
+    const [signState, setSignState] = useState<SignState>('idle');
+    const [currentVelocity, setCurrentVelocity] = useState(0);
     const [error, setError] = useState<string | null>(null);
 
     // Refs
@@ -53,6 +79,12 @@ export function useHandLandmarker({ onSignComplete }: UseHandLandmarkerProps = {
     const signStartTimeRef = useRef<number | null>(null);
     const lastFrameCaptureRef = useRef<number>(0);
     const signCompleteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    // State machine refs
+    const currentStateRef = useRef<SignState>('idle');
+    const stateEnterTimeRef = useRef<number>(0);
+    const landmarkHistoryRef = useRef<LandmarkPosition[][]>([]);
+    const preparingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     // Initialize MediaPipe HandLandmarker
     const initialize = useCallback(async () => {
@@ -159,8 +191,8 @@ export function useHandLandmarker({ onSignComplete }: UseHandLandmarkerProps = {
             drawLandmarks(ctx, results.landmarks);
         }
 
-        // Handle sign capture logic
-        handleSignCapture(hasHands, results, canvas, now);
+        // Handle sign capture logic using new state machine
+        handleSignStateMachine(hasHands, results, canvas, now);
 
         // Continue loop
         animationFrameRef.current = requestAnimationFrame(detectHands);
@@ -207,31 +239,163 @@ export function useHandLandmarker({ onSignComplete }: UseHandLandmarkerProps = {
         });
     };
 
-    // Handle sign capture state machine
-    const handleSignCapture = (
+    /**
+     * Calculate average velocity from landmark history
+     * Uses wrist position (landmark 0) as reference point
+     */
+    const calculateVelocity = (results: HandLandmarkerResult): number => {
+        if (!results.landmarks || results.landmarks.length === 0) {
+            return 0;
+        }
+
+        // Extract wrist positions from all detected hands
+        const currentPositions: LandmarkPosition[] = results.landmarks.map(hand => ({
+            x: hand[0].x,
+            y: hand[0].y,
+            z: hand[0].z,
+        }));
+
+        // Add to history
+        landmarkHistoryRef.current.push(currentPositions);
+
+        // Keep only recent history
+        if (landmarkHistoryRef.current.length > VELOCITY_CONFIG.historyLength) {
+            landmarkHistoryRef.current.shift();
+        }
+
+        // Need at least 2 frames to calculate velocity
+        if (landmarkHistoryRef.current.length < 2) {
+            return 0;
+        }
+
+        // Calculate average velocity between consecutive frames
+        let totalVelocity = 0;
+        let count = 0;
+
+        for (let i = 1; i < landmarkHistoryRef.current.length; i++) {
+            const prev = landmarkHistoryRef.current[i - 1];
+            const curr = landmarkHistoryRef.current[i];
+
+            // Compare each hand's movement
+            const maxHands = Math.min(prev.length, curr.length);
+            for (let h = 0; h < maxHands; h++) {
+                const dx = curr[h].x - prev[h].x;
+                const dy = curr[h].y - prev[h].y;
+                const dz = curr[h].z - prev[h].z;
+                const velocity = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                totalVelocity += velocity;
+                count++;
+            }
+        }
+
+        return count > 0 ? totalVelocity / count : 0;
+    };
+
+    /**
+     * Transition to a new state
+     */
+    const transitionState = (newState: SignState, now: number) => {
+        if (currentStateRef.current === newState) return;
+
+        const prevState = currentStateRef.current;
+        currentStateRef.current = newState;
+        stateEnterTimeRef.current = now;
+        setSignState(newState);
+
+        // Notify callback if provided
+        if (onStateChange) {
+            onStateChange(newState);
+        }
+
+        console.log(`🔄 Sign state: ${prevState} → ${newState}`);
+    };
+
+    /**
+     * Handle sign capture state machine
+     * States: idle → preparing → signing → completing → idle
+     */
+    const handleSignStateMachine = (
         hasHands: boolean,
         results: HandLandmarkerResult,
         canvas: HTMLCanvasElement,
         now: number
     ) => {
-        if (hasHands) {
-            lastHandsDetectedRef.current = now;
+        const velocity = hasHands ? calculateVelocity(results) : 0;
+        setCurrentVelocity(velocity);
 
-            // Clear any pending "sign complete" timeout
-            if (signCompleteTimeoutRef.current) {
-                clearTimeout(signCompleteTimeoutRef.current);
-                signCompleteTimeoutRef.current = null;
-            }
+        const state = currentStateRef.current;
+        const timeInState = now - stateEnterTimeRef.current;
 
-            // Start capturing if not already
-            if (!signStartTimeRef.current) {
-                signStartTimeRef.current = now;
-                capturedFramesRef.current = [];
-                setIsCapturing(true);
-                console.log('🤟 Sign started - capturing frames');
-            }
+        switch (state) {
+            case 'idle':
+                if (hasHands) {
+                    // Start preparing - hands detected
+                    transitionState('preparing', now);
+                    signStartTimeRef.current = now;
+                    capturedFramesRef.current = [];
+                    setIsCapturing(true);
+                    landmarkHistoryRef.current = [];
+                }
+                break;
 
-            // Capture frame at intervals
+            case 'preparing':
+                if (!hasHands) {
+                    // Hands disappeared, back to idle
+                    transitionState('idle', now);
+                    resetCapture();
+                } else if (velocity > VELOCITY_CONFIG.movementThreshold) {
+                    // Significant movement detected - transition to signing
+                    transitionState('signing', now);
+                    console.log('🤟 Movement detected - capturing sign');
+                } else if (timeInState > VELOCITY_CONFIG.preparingTimeout) {
+                    // Auto-transition to signing after preparing timeout
+                    // (handles static signs that don't involve movement)
+                    transitionState('signing', now);
+                    console.log('🤟 Static sign detected - capturing');
+                }
+                break;
+
+            case 'signing':
+                if (!hasHands) {
+                    // Hands disappeared while signing
+                    const signDuration = now - (signStartTimeRef.current || now);
+                    if (signDuration >= SIGN_THRESHOLDS.minSignDuration) {
+                        // Long enough, transition to completing
+                        transitionState('completing', now);
+                    } else {
+                        // Too short, reset
+                        transitionState('idle', now);
+                        resetCapture();
+                    }
+                } else if (velocity < VELOCITY_CONFIG.stillnessThreshold) {
+                    // Movement stopped - transition to completing
+                    const signDuration = now - (signStartTimeRef.current || now);
+                    if (signDuration >= SIGN_THRESHOLDS.minSignDuration) {
+                        transitionState('completing', now);
+                    }
+                }
+                break;
+
+            case 'completing':
+                if (hasHands && velocity > VELOCITY_CONFIG.movementThreshold) {
+                    // Movement resumed - back to signing
+                    transitionState('signing', now);
+                } else if (timeInState >= SIGN_THRESHOLDS.signCompleteDelay) {
+                    // Stillness confirmed - complete the sign
+                    completeSign();
+                    transitionState('idle', now);
+                } else if (!hasHands) {
+                    // Hands disappeared, still complete if we have frames
+                    if (timeInState >= SIGN_THRESHOLDS.signCompleteDelay / 2) {
+                        completeSign();
+                        transitionState('idle', now);
+                    }
+                }
+                break;
+        }
+
+        // Capture frames during preparing, signing, and completing states
+        if (state !== 'idle' && hasHands) {
             if (now - lastFrameCaptureRef.current >= SIGN_THRESHOLDS.frameInterval) {
                 lastFrameCaptureRef.current = now;
 
@@ -243,22 +407,6 @@ export function useHandLandmarker({ onSignComplete }: UseHandLandmarkerProps = {
                     imageData,
                     landmarks: results,
                 });
-            }
-
-        } else if (signStartTimeRef.current) {
-            // Hands disappeared - check if sign is complete
-            const signDuration = now - signStartTimeRef.current;
-
-            if (signDuration >= SIGN_THRESHOLDS.minSignDuration) {
-                // Set timeout to complete sign
-                if (!signCompleteTimeoutRef.current) {
-                    signCompleteTimeoutRef.current = setTimeout(() => {
-                        completeSign();
-                    }, SIGN_THRESHOLDS.signCompleteDelay);
-                }
-            } else {
-                // Sign was too short, reset
-                resetCapture();
             }
         }
     };
@@ -280,10 +428,16 @@ export function useHandLandmarker({ onSignComplete }: UseHandLandmarkerProps = {
         signStartTimeRef.current = null;
         capturedFramesRef.current = [];
         setIsCapturing(false);
+        landmarkHistoryRef.current = [];
 
         if (signCompleteTimeoutRef.current) {
             clearTimeout(signCompleteTimeoutRef.current);
             signCompleteTimeoutRef.current = null;
+        }
+
+        if (preparingTimeoutRef.current) {
+            clearTimeout(preparingTimeoutRef.current);
+            preparingTimeoutRef.current = null;
         }
     };
 
@@ -325,6 +479,8 @@ export function useHandLandmarker({ onSignComplete }: UseHandLandmarkerProps = {
         isDetecting,
         handsDetected,
         isCapturing,
+        signState,
+        currentVelocity,
         error,
 
         // Methods

@@ -145,7 +145,9 @@ export function parseResponse(variant: PromptVariant, response: string): {
         case 'twostage': {
             // Format: OBSERVATION: ... TRANSLATION: ...
             const transMatch = trimmed.match(/TRANSLATION:\s*(.+)/i);
-            const obsMatch = trimmed.match(/OBSERVATION:\s*(.+?)(?:TRANSLATION:|$)/is);
+            // Use split approach instead of 's' flag for ES2015 compatibility
+            const obsSection = trimmed.split(/TRANSLATION:/i)[0] || '';
+            const obsMatch = obsSection.match(/OBSERVATION:\s*([\s\S]+)/i);
             return {
                 translation: transMatch ? transMatch[1].trim() : trimmed,
                 observation: obsMatch ? obsMatch[1].trim() : undefined,
