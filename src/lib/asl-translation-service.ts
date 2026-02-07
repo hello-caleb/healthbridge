@@ -64,6 +64,110 @@ export function getASLConfig(): ASLConfig {
     return { ...currentConfig };
 }
 
+// ============================================
+// RATE LIMITING - Prevent excessive API calls
+// ============================================
+
+interface RateLimitState {
+    lastRequestTime: number;
+    requestsInLastMinute: number[];
+    isRequestInProgress: boolean;
+}
+
+const rateLimitState: RateLimitState = {
+    lastRequestTime: 0,
+    requestsInLastMinute: [],
+    isRequestInProgress: false,
+};
+
+/** Minimum time between API requests (ms) */
+const MIN_REQUEST_INTERVAL = 2000; // 2 seconds
+
+/** Maximum requests per minute */
+const MAX_REQUESTS_PER_MINUTE = 10;
+
+/**
+ * Check if we can make a new API request
+ * Returns { allowed: boolean, reason?: string, waitMs?: number }
+ */
+function checkRateLimit(): { allowed: boolean; reason?: string; waitMs?: number } {
+    const now = Date.now();
+
+    // Clean up old timestamps (older than 1 minute)
+    rateLimitState.requestsInLastMinute = rateLimitState.requestsInLastMinute.filter(
+        t => now - t < 60000
+    );
+
+    // Check if request is already in progress
+    if (rateLimitState.isRequestInProgress) {
+        return { allowed: false, reason: 'Request already in progress' };
+    }
+
+    // Check minimum interval
+    const timeSinceLastRequest = now - rateLimitState.lastRequestTime;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+        return {
+            allowed: false,
+            reason: 'Too soon after last request',
+            waitMs: MIN_REQUEST_INTERVAL - timeSinceLastRequest
+        };
+    }
+
+    // Check requests per minute limit
+    if (rateLimitState.requestsInLastMinute.length >= MAX_REQUESTS_PER_MINUTE) {
+        const oldestRequest = rateLimitState.requestsInLastMinute[0];
+        const waitMs = 60000 - (now - oldestRequest);
+        return {
+            allowed: false,
+            reason: `Rate limit: ${MAX_REQUESTS_PER_MINUTE}/minute exceeded`,
+            waitMs
+        };
+    }
+
+    return { allowed: true };
+}
+
+/**
+ * Record that a request was made
+ */
+function recordRequest(): void {
+    const now = Date.now();
+    rateLimitState.lastRequestTime = now;
+    rateLimitState.requestsInLastMinute.push(now);
+    rateLimitState.isRequestInProgress = true;
+}
+
+/**
+ * Mark request as complete
+ */
+function requestComplete(): void {
+    rateLimitState.isRequestInProgress = false;
+}
+
+/**
+ * Get rate limit status for UI display
+ */
+export function getRateLimitStatus(): {
+    requestsRemaining: number;
+    nextRequestIn: number;
+    isThrottled: boolean;
+} {
+    const now = Date.now();
+    rateLimitState.requestsInLastMinute = rateLimitState.requestsInLastMinute.filter(
+        t => now - t < 60000
+    );
+
+    const requestsRemaining = MAX_REQUESTS_PER_MINUTE - rateLimitState.requestsInLastMinute.length;
+    const timeSinceLastRequest = now - rateLimitState.lastRequestTime;
+    const nextRequestIn = Math.max(0, MIN_REQUEST_INTERVAL - timeSinceLastRequest);
+
+    return {
+        requestsRemaining,
+        nextRequestIn,
+        isThrottled: requestsRemaining <= 0 || rateLimitState.isRequestInProgress,
+    };
+}
+
 // System prompt for ASL interpretation
 const ASL_SYSTEM_PROMPT = `You are an ASL (American Sign Language) interpreter assistant for a healthcare communication app.
 
@@ -121,6 +225,24 @@ export async function translateASLFrames(
         };
     }
 
+    // Check rate limit before making API call
+    const rateLimitCheck = checkRateLimit();
+    if (!rateLimitCheck.allowed) {
+        const status = getRateLimitStatus();
+        console.warn(`⚠️ Rate limited: ${rateLimitCheck.reason}. Remaining: ${status.requestsRemaining}/min`);
+        return {
+            translation: `[throttled - ${status.requestsRemaining} calls left]`,
+            confidence: 'unclear',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            latencyMs: Date.now() - startTime,
+            framesUsed: 0,
+            modelUsed: config.model,
+        };
+    }
+
+    // Record this request for rate limiting
+    recordRequest();
+
     try {
         // Select key frames using adaptive or even distribution
         const keyFrameIndices = selectKeyFramesAdaptive(frames, {
@@ -171,6 +293,9 @@ What ASL sign or phrase is being made? Remember to respond with just the English
             console.log(`🤟 ASL Translation: "${text}" (confidence: ${confidence}, ${keyFrames.length} frames, ${latencyMs}ms, ${config.model})`);
         }
 
+        // Mark request complete for rate limiting
+        requestComplete();
+
         return {
             translation: text,
             confidence,
@@ -181,6 +306,9 @@ What ASL sign or phrase is being made? Remember to respond with just the English
         };
 
     } catch (error: any) {
+        // Mark request complete even on error
+        requestComplete();
+
         const latencyMs = Date.now() - startTime;
         console.error('❌ ASL Translation error:', error);
 
