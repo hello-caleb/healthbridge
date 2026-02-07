@@ -125,22 +125,46 @@ export function useHandLandmarker({
                 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm'
             );
 
-            // Create HandLandmarker
-            const handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                baseOptions: {
-                    modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-                    delegate: 'GPU',
-                },
-                ...DETECTION_CONFIG,
-            });
+            // Try GPU first, fallback to CPU if it fails
+            let handLandmarker: HandLandmarker | null = null;
+
+            try {
+                // Try GPU delegate first
+                handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                        delegate: 'GPU',
+                    },
+                    ...DETECTION_CONFIG,
+                });
+                console.log('✅ HandLandmarker initialized with GPU');
+            } catch (gpuError) {
+                console.warn('⚠️ GPU delegate failed, falling back to CPU:', gpuError);
+
+                // Fallback to CPU delegate
+                handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                        delegate: 'CPU',
+                    },
+                    ...DETECTION_CONFIG,
+                });
+                console.log('✅ HandLandmarker initialized with CPU');
+            }
 
             handLandmarkerRef.current = handLandmarker;
             setIsInitialized(true);
-            console.log('✅ HandLandmarker initialized');
 
-        } catch (err: any) {
-            console.error('❌ HandLandmarker initialization failed:', err);
-            setError(`Failed to initialize hand detection: ${err.message}`);
+        } catch (err: unknown) {
+            // Better error logging - handle non-Error objects
+            const errorMessage = err instanceof Error
+                ? err.message
+                : typeof err === 'string'
+                    ? err
+                    : JSON.stringify(err) || 'Unknown error';
+
+            console.error('❌ HandLandmarker initialization failed:', errorMessage, err);
+            setError(`Failed to initialize hand detection: ${errorMessage}`);
         }
     }, []);
 
