@@ -51,6 +51,14 @@ HealthBridge is a real-time healthcare communication assistant for Deaf/Hard-of-
   - [x] Input mode toggle (Audio/ASL) in CinematicVideoRoom.
   - [x] ASL translations displayed in Live Transcription view.
 
+- [x] **Phase 5.5: Demo Mode & Landing Page** *(Hackathon Submission)*
+  - [x] Pre-scripted cardiology demo transcript (`demo-transcript.ts`).
+  - [x] Demo mode hook with auto-playback (`use-demo-mode.ts`).
+  - [x] Demo banner with progress bar and controls.
+  - [x] Landing page with hero section and feature cards (`LandingPage.tsx`).
+  - [x] Session routing (`/session` for video room, `/` for landing).
+  - [x] "Watch Demo" CTA linking to `/session?demo=true`.
+
 - [ ] **Phase 6: Post-Consultation** *(Stretch)*
   - Generate Visit Summaries (PDF/Text).
   - Export to EHR (FHIR standard placeholder).

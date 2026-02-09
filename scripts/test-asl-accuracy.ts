@@ -16,6 +16,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+// Load environment variables from .env.local
+dotenv.config({ path: '.env.local' });
 
 // Types
 interface SignTestCase {
@@ -87,10 +91,16 @@ const RESULTS_PATH = path.join(TEST_DATA_PATH, 'test-results.json');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
+const getArg = (name: string) => {
+    const index = args.indexOf(name);
+    return index !== -1 && index + 1 < args.length ? args[index + 1] : null;
+};
+
+const signArg = getArg('--sign');
 const verbose = args.includes('--verbose');
-const jsonOutput = args.includes('--json');
-const signIndex = args.indexOf('--sign');
-const targetSign = signIndex !== -1 ? args[signIndex + 1] : null;
+const jsonOutput = args.includes('--json'); // Keep jsonOutput as it was not removed by the instruction
+const variantArg = getArg('--variant') || 'baseline';
+const targetSign = signArg; // Use signArg instead of the problematic signIndex logic
 
 /**
  * Load ground truth data
@@ -101,13 +111,66 @@ function loadGroundTruth(): GroundTruth {
 }
 
 /**
- * Simulate ASL translation (placeholder for actual implementation)
- * In production, this would call the actual translation service
+ * Extract frames from video file
+ */
+async function extractFrames(videoPath: string): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+        const frames: string[] = [];
+        const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+        const ffmpeg = require('fluent-ffmpeg');
+        ffmpeg.setFfmpegPath(ffmpegPath);
+
+        // Create temporary directory for frames
+        const tempDir = path.join(process.cwd(), 'temp_frames_' + Date.now());
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir);
+        }
+
+        ffmpeg(videoPath)
+            .fps(10) // Extract 10 frames per second
+            .size('480x?') // Resize to 480p width, maintain aspect ratio
+            .output(path.join(tempDir, 'frame-%d.jpg'))
+            .on('end', async () => {
+                try {
+                    // Read all generated frame files
+                    const files = fs.readdirSync(tempDir)
+                        .filter(f => f.endsWith('.jpg'))
+                        .sort((a, b) => {
+                            // Sort numerically: frame-1.jpg, frame-2.jpg
+                            const numA = parseInt(a.match(/(\d+)/)?.[0] || '0');
+                            const numB = parseInt(b.match(/(\d+)/)?.[0] || '0');
+                            return numA - numB;
+                        });
+
+                    // Convert to base64
+                    for (const file of files) {
+                        const filePath = path.join(tempDir, file);
+                        const buffer = fs.readFileSync(filePath);
+                        frames.push(buffer.toString('base64'));
+                    }
+
+                    // Cleanup
+                    fs.rmSync(tempDir, { recursive: true, force: true });
+                    resolve(frames);
+                } catch (err) {
+                    reject(err);
+                }
+            })
+            .on('error', (err: any) => {
+                // Cleanup on error
+                if (fs.existsSync(tempDir)) {
+                    fs.rmSync(tempDir, { recursive: true, force: true });
+                }
+                reject(err);
+            })
+            .run();
+    });
+}
+
+/**
+ * Real ASL translation using video file
  */
 async function translateSign(videoPath: string): Promise<{ translation: string; latency: number }> {
-    // TODO: Replace with actual translation when videos are available
-    // For now, simulate translation with placeholder responses
-
     const startTime = Date.now();
 
     // Check if video file exists
@@ -115,23 +178,58 @@ async function translateSign(videoPath: string): Promise<{ translation: string; 
         throw new Error(`Video file not found: ${videoPath}`);
     }
 
-    // Simulate API call latency (500-1500ms)
-    await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+    try {
+        if (verbose) console.log(`  Processing video: ${path.basename(videoPath)}`);
 
-    // In a real implementation, this would:
-    // 1. Load video file
-    // 2. Extract frames
-    // 3. Call translateASLFrames() from asl-translation-service.ts
-    // 4. Return the result
+        // 1. Extract frames from video
+        const base64Frames = await extractFrames(videoPath);
 
-    // Placeholder: return a mock translation
-    // This should be replaced with actual API call
-    const translation = '[placeholder - video not processed]';
+        if (base64Frames.length === 0) {
+            throw new Error('No frames extracted from video');
+        }
 
-    return {
-        translation,
-        latency: Date.now() - startTime,
-    };
+        if (verbose) console.log(`  Extracted ${base64Frames.length} frames`);
+
+        // 2. Convert to HandFrame format expected by service
+        // Note: We don't have landmarks for pre-recorded video unless we run MediaPipe here.
+        // The service uses landmarks for adaptive selection. 
+        // For testing, we'll create mock HandFrames with just image data.
+        // This means adaptive selection based on motion won't work fully, 
+        // but Gemin 2.0 Flash is smart enough to handle raw frames.
+
+        // Dynamic import to avoid issues if run outside nextjs context
+        // We need to import the service. Since we are running in tsx, we can import directly.
+        // However, we need to handle the alias '@/' manually if tsconfig-paths isn't set up for tsx.
+        // For this script, we'll try to import relative path.
+        const { translateASLFrames, setASLConfig } = await import('../src/lib/asl-translation-service');
+
+        // Mock HandFrames
+        const handFrames: any[] = base64Frames.map((data, index) => ({
+            timestamp: startTime + (index * 100), // 10fps = 100ms
+            imageData: data,
+            landmarks: null // We skip landmark detection for now to speed up test
+        }));
+
+        // Configure service for testing
+        setASLConfig({
+            maxFrames: 12,
+            verbose: verbose,
+            useAdaptiveSelection: false, // vital: disable adaptive since we have no landmarks
+            promptVariant: variantArg as any
+        });
+
+        // 3. Call Translation Service
+        const result = await translateASLFrames(handFrames);
+
+        return {
+            translation: result.translation,
+            latency: result.latencyMs || (Date.now() - startTime),
+        };
+
+    } catch (error) {
+        console.error('Translation error:', error);
+        throw error;
+    }
 }
 
 /**
@@ -178,19 +276,20 @@ async function runTests(): Promise<TestReport> {
     let totalScore = 0;
     let totalLatency = 0;
 
-    // Filter tests if specific sign requested
-    const testsToRun = targetSign
-        ? groundTruth.signs.filter(s => s.sign.toLowerCase() === targetSign.toLowerCase())
-        : groundTruth.signs;
+    // Load ground truth
+    let tests = groundTruth.signs;
 
-    if (testsToRun.length === 0) {
-        console.error(`❌ No tests found${targetSign ? ` for sign: ${targetSign}` : ''}`);
-        process.exit(1);
+    // Filter by sign if specified
+    if (targetSign) {
+        tests = tests.filter(t => t.sign.toLowerCase() === targetSign.toLowerCase());
+        if (tests.length === 0) {
+            console.error(`Error: No test cases found for sign "${targetSign}"`);
+            process.exit(1);
+        }
     }
+    console.log(`Running ${tests.length} tests...\n`);
 
-    console.log(`Running ${testsToRun.length} tests...\n`);
-
-    for (const testCase of testsToRun) {
+    for (const testCase of tests) {
         const videoPath = path.join(TEST_DATA_PATH, testCase.video_file);
 
         try {
@@ -338,7 +437,7 @@ async function runTests(): Promise<TestReport> {
 
     const report: TestReport = {
         timestamp: new Date().toISOString(),
-        total_tests: testsToRun.length,
+        total_tests: tests.length,
         passed: results.filter(r => r.score >= 0.8).length,
         failed: results.filter(r => r.score < 0.8).length,
         accuracy,

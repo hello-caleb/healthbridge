@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { GeminiClientEvent, GeminiServerEvent } from '@/types/gemini';
 import { SYSTEM_INSTRUCTION } from '@/lib/prompts';
 import { detectMedicalTerms, MedicalTerm } from '@/lib/gemini-3-service';
+import { ApiUsageTracker } from '@/lib/api-usage-tracker';
 
 interface UseGeminiClientProps {
     apiKey?: string;
@@ -20,11 +21,14 @@ const RECONNECT_CONFIG = {
 };
 
 // Model configuration with fallbacks
+// Only gemini-2.5-flash-native-audio-preview models support Live API!
 const MODEL_CONFIG = {
-    // Primary: Native audio for real-time transcription
-    primary: "models/gemini-2.0-flash-live-001",
-    // Fallback if primary not available
-    fallback: "models/gemini-2.0-flash",
+    // Try the Sep 2025 version first (more widely available)
+    primary: "models/gemini-2.5-flash-native-audio-preview-09-2025",
+    // Alternative: Dec 2025 version
+    alternatives: [
+        "models/gemini-2.5-flash-native-audio-preview-12-2025",
+    ]
 };
 
 export function useGeminiClient({ apiKey, url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent" }: UseGeminiClientProps) {
@@ -223,7 +227,7 @@ export function useGeminiClient({ apiKey, url = "wss://generativelanguage.google
             if (!transcript || processingRef.current.isProcessing) return;
 
             // Check if rate limited or daily limit reached (max 15 calls to stay under free tier)
-            if (rateLimitRef.current.isRateLimited || rateLimitRef.current.dailyCalls >= 15) {
+            if (rateLimitRef.current.isRateLimited || !ApiUsageTracker.checkAvailability('jargon')) {
                 return;
             }
 
@@ -239,6 +243,7 @@ export function useGeminiClient({ apiKey, url = "wss://generativelanguage.google
 
                 try {
                     rateLimitRef.current.dailyCalls++;
+                    ApiUsageTracker.increment('jargon');
                     const terms = await detectMedicalTerms(newSegment);
                     if (terms.length > 0) {
                         // Add timestamps manually since REST API doesn't give them
@@ -261,7 +266,7 @@ export function useGeminiClient({ apiKey, url = "wss://generativelanguage.google
                     processingRef.current.isProcessing = false;
                 }
             }
-        }, 30000); // Check every 30 seconds (reduced from 3s to avoid quota issues)
+        }, 8000); // Check every 8 seconds (increased responsiveness from 30s)
 
         return () => clearInterval(intervalId);
     }, [transcript]);

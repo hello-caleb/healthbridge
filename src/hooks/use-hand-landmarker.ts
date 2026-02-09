@@ -24,10 +24,10 @@ const SIGN_THRESHOLDS = {
 
 // Velocity thresholds for motion detection
 const VELOCITY_CONFIG = {
-    movementThreshold: 0.02,   // Normalized units per frame (significant movement)
+    movementThreshold: 0.015,  // Normalized units per frame (lowered to capture fingerspelling)
     stillnessThreshold: 0.005, // Normalized units per frame (considered still)
-    historyLength: 5,          // Number of frames to average velocity over
-    preparingTimeout: 300,     // Ms in preparing before auto-transitioning to signing
+    historyLength: 8,          // Number of frames to average velocity over (increased for stability)
+    preparingTimeout: 500,     // Ms in preparing before auto-transitioning to signing (increased)
 };
 
 // Landmark smoothing configuration (reduces jitter)
@@ -109,10 +109,14 @@ export function useHandLandmarker({
     const stateEnterTimeRef = useRef<number>(0);
     const landmarkHistoryRef = useRef<LandmarkPosition[][]>([]);
     const preparingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isStartingRef = useRef(false);
+    const isDetectingRef = useRef(false);
 
     // Smoothing refs - stores smoothed landmark positions for each hand
     // [handIndex][landmarkIndex] = SmoothedLandmark
     const smoothedLandmarksRef = useRef<SmoothedLandmark[][]>([]);
+
+    const inferenceCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
     // Initialize MediaPipe HandLandmarker
     const initialize = useCallback(async () => {
@@ -170,16 +174,26 @@ export function useHandLandmarker({
 
     // Start camera and detection
     const startDetection = useCallback(async (videoElement: HTMLVideoElement, canvasElement: HTMLCanvasElement) => {
-        if (!handLandmarkerRef.current) {
-            await initialize();
-        }
-
-        if (!handLandmarkerRef.current) {
-            setError('Hand detection not initialized');
+        // Prevent concurrent starts or starting if already detecting
+        // Note: We check isStartingRef to prevent race conditions from rapid toggling
+        if (isDetectingRef.current || isStartingRef.current) {
+            console.log('⚠️ Detection already active or starting');
             return;
         }
 
+        isStartingRef.current = true;
+
         try {
+            if (!handLandmarkerRef.current) {
+                await initialize();
+            }
+
+            if (!handLandmarkerRef.current) {
+                setError('Hand detection not initialized');
+                isStartingRef.current = false;
+                return;
+            }
+
             // Get camera stream
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: {
@@ -190,7 +204,17 @@ export function useHandLandmarker({
             });
 
             videoElement.srcObject = stream;
-            await videoElement.play();
+
+            try {
+                await videoElement.play();
+            } catch (playError: any) {
+                // Ignore "interrupted" errors which happen during rapid toggling
+                if (playError.name === 'AbortError' || playError.toString().includes('interrupted')) {
+                    console.log('⚠️ Video play interrupted (likely rapid toggling), ignoring');
+                } else {
+                    throw playError;
+                }
+            }
 
             videoRef.current = videoElement;
             canvasRef.current = canvasElement;
@@ -200,8 +224,16 @@ export function useHandLandmarker({
             canvasElement.width = videoElement.videoWidth;
             canvasElement.height = videoElement.videoHeight;
 
+            // Initialize Inference Canvas (Offscreen)
+            if (!inferenceCanvasRef.current) {
+                inferenceCanvasRef.current = document.createElement('canvas');
+            }
+            inferenceCanvasRef.current.width = videoElement.videoWidth;
+            inferenceCanvasRef.current.height = videoElement.videoHeight;
+
+            isDetectingRef.current = true;
             setIsDetecting(true);
-            console.log('📹 Camera started, beginning hand detection');
+            console.log('📹 Camera started, beginning hand detection (Dual-Canvas Mode)');
 
             // Start detection loop
             detectHands();
@@ -209,6 +241,10 @@ export function useHandLandmarker({
         } catch (err: any) {
             console.error('❌ Camera start failed:', err);
             setError(`Camera access failed: ${err.message}`);
+            setIsDetecting(false); // Ensure state is reset
+            isDetectingRef.current = false;
+        } finally {
+            isStartingRef.current = false;
         }
     }, [initialize]);
 
@@ -285,8 +321,6 @@ export function useHandLandmarker({
 
         return smoothedResults;
     };
-
-    // Detection loop
     const detectHands = useCallback(() => {
         if (!handLandmarkerRef.current || !videoRef.current || !canvasRef.current) {
             return;
@@ -295,8 +329,10 @@ export function useHandLandmarker({
         const video = videoRef.current;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
+        const inferenceCanvas = inferenceCanvasRef.current;
+        const inferenceCtx = inferenceCanvas?.getContext('2d');
 
-        if (!ctx || video.readyState !== 4) {
+        if (!ctx || !inferenceCtx || video.readyState !== 4) {
             animationFrameRef.current = requestAnimationFrame(detectHands);
             return;
         }
@@ -313,24 +349,33 @@ export function useHandLandmarker({
 
         setHandsDetected(hasHands);
 
-        // Draw video frame to canvas
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Draw hand landmarks overlay (uses smoothed landmarks)
+        // 1. DRAW UI CANVAS (What the User sees)
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height); // Draw Video
         if (hasHands && results.landmarks) {
-            drawLandmarks(ctx, results.landmarks);
+            drawLandmarks(ctx, results.landmarks, false); // Draw Overlay
         }
 
+        // 2. DRAW INFERENCE CANVAS (What Gemini sees)
+        // High contrast: Black background, Bright Green Skeleton
+        inferenceCtx.fillStyle = '#000000';
+        inferenceCtx.fillRect(0, 0, inferenceCanvas!.width, inferenceCanvas!.height);
+
+        if (hasHands && results.landmarks) {
+            drawLandmarks(inferenceCtx, results.landmarks, true); // Draw Skeleton
+        }
+
+
         // Handle sign capture logic using new state machine
-        handleSignStateMachine(hasHands, results, canvas, now);
+        // Pass the INFERENCE canvas for capture
+        handleSignStateMachine(hasHands, results, inferenceCanvas!, now);
 
         // Continue loop
         animationFrameRef.current = requestAnimationFrame(detectHands);
     }, [disableSmoothing, smoothingFactor, currentVelocity]);
 
     // Draw hand landmarks on canvas
-    const drawLandmarks = (ctx: CanvasRenderingContext2D, landmarks: any[]) => {
-        landmarks.forEach((hand) => {
+    const drawLandmarks = (ctx: CanvasRenderingContext2D, landmarks: any[], highContrast: boolean) => {
+        landmarks.forEach((hand: any[]) => {
             // Draw connections
             const connections = [
                 [0, 1], [1, 2], [2, 3], [3, 4],       // Thumb
@@ -341,8 +386,14 @@ export function useHandLandmarker({
                 [5, 9], [9, 13], [13, 17],             // Palm
             ];
 
-            ctx.strokeStyle = 'rgba(16, 185, 129, 0.8)'; // Emerald
-            ctx.lineWidth = 2;
+            // Style configuration
+            const connectionColor = highContrast ? '#00FF00' : 'rgba(16, 185, 129, 0.8)'; // Bright Green vs Emerald
+            const landmarkColor = highContrast ? '#FFFFFF' : 'rgba(255, 255, 255, 0.9)';
+            const lineWidth = highContrast ? 4 : 2; // Thicker lines for AI visibility
+            const landmarkRadius = highContrast ? 5 : 4; // Larger points for AI
+
+            ctx.strokeStyle = connectionColor;
+            ctx.lineWidth = lineWidth;
 
             connections.forEach(([start, end]) => {
                 const startPoint = hand[start];
@@ -355,12 +406,12 @@ export function useHandLandmarker({
 
             // Draw landmarks
             hand.forEach((landmark: any) => {
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillStyle = landmarkColor;
                 ctx.beginPath();
                 ctx.arc(
                     landmark.x * ctx.canvas.width,
                     landmark.y * ctx.canvas.height,
-                    4,
+                    landmarkRadius,
                     0,
                     2 * Math.PI
                 );
@@ -588,7 +639,9 @@ export function useHandLandmarker({
         }
 
         resetCapture();
+        resetCapture();
         setIsDetecting(false);
+        isDetectingRef.current = false;
         setHandsDetected(false);
         console.log('🛑 Hand detection stopped');
     }, []);

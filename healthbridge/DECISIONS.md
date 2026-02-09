@@ -18,13 +18,16 @@ This document records the architectural decisions made for the HealthBridge proj
 Accepted
 
 ### Context
-We initially selected Gemini 3.0 Flash for our AI engine due to its speed and cost-effectiveness. However, as we integrated more complex interactions—specifically the real-time "Jargon Detection" and "Multi-party Diarization"—we encountered significant limitations:
-*   **Reasoning Depth:** The "Flash" model struggled with subtle context switching between [Doctor] and [Patient] roles during complex medical dialogue.
-*   **Instruction Following:** It frequently missed the strict output formatting required for our frontend to render 'Thought Signatures' correctly.
+We initially selected Gemini 3.0 Flash for our AI engine due to its speed and cost-effectiveness. However, when implementing real-time audio transcription for DHH accessibility, we discovered a critical **API feature gap**:
+
+*   **Live Audio API Not Supported:** Gemini 3.0 Flash does not support the `BidiGenerateContent` WebSocket endpoint required for real-time bidirectional audio streaming. Our use case requires sending live PCM audio (16kHz, mono) and receiving transcriptions in real-time—a feature only available in models with native audio capabilities.
 
 ### Decision
-We will change the underlying architecture to use a more capable model (Pending specific model selection, e.g., Gemini 3.0 Pro or similar high-reasoning variant) for the core intelligence layer.
+We migrated to `gemini-2.5-flash-native-audio-preview-12-2025`, a model that supports:
+*   Real-time bidirectional audio streaming via WebSocket (`v1beta` API)
+*   `responseModalities: ["AUDIO"]` for audio-in/audio-out capabilities
+*   Native PCM audio input at 16kHz
 
 ### Consequences
-*   **Positive:** Improved accuracy in speaker diarization and jargon translation. Better adherence to safety guardrails (`manifesto.md`).
-*   **Negative:** Likely higher latency and cost per token compared to the Flash model. We may need to implement optimistic UI updates to mask the increased latency.
+*   **Positive:** Enables the core Live Transcription feature required for DHH accessibility. Real-time audio streaming now works as designed.
+*   **Negative:** Using a preview model introduces potential instability. We may need to migrate again when a stable native-audio model is released.

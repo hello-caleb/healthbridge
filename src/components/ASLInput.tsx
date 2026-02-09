@@ -107,17 +107,14 @@ export function ASLInput({ onTranslation, isEnabled = true }: ASLInputProps) {
 
                     {/* Detection status */}
                     {isDetecting && (
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-sm border ${
-                            handsDetected
-                                ? 'bg-emerald-500/20 border-emerald-400/30'
-                                : 'bg-white/10 border-white/20'
-                        }`}>
-                            <div className={`w-2 h-2 rounded-full ${
-                                handsDetected ? 'bg-emerald-400 animate-pulse' : 'bg-white/50'
-                            }`} />
-                            <span className={`text-xs font-bold uppercase tracking-wider ${
-                                handsDetected ? 'text-emerald-300' : 'text-white/50'
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg backdrop-blur-sm border ${handsDetected
+                            ? 'bg-emerald-500/20 border-emerald-400/30'
+                            : 'bg-white/10 border-white/20'
                             }`}>
+                            <div className={`w-2 h-2 rounded-full ${handsDetected ? 'bg-emerald-400 animate-pulse' : 'bg-white/50'
+                                }`} />
+                            <span className={`text-xs font-bold uppercase tracking-wider ${handsDetected ? 'text-emerald-300' : 'text-white/50'
+                                }`}>
                                 {handsDetected ? 'Hands Detected' : 'Waiting...'}
                             </span>
                         </div>
@@ -146,7 +143,7 @@ export function ASLInput({ onTranslation, isEnabled = true }: ASLInputProps) {
 
                 {/* Not detecting overlay */}
                 {!isDetecting && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-20">
                         <div className="flex flex-col items-center gap-4">
                             <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center border border-white/20">
                                 <Hand className="w-10 h-10 text-white/50" />
@@ -162,6 +159,25 @@ export function ASLInput({ onTranslation, isEnabled = true }: ASLInputProps) {
                     </div>
                 )}
 
+                {/* RED SQUARE GUIDE (Viewfinder) */}
+                {isDetecting && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10 transition-opacity duration-300">
+                        {/* The Guide Box */}
+                        <div className="relative w-[85%] h-[85%] border-2 border-red-500/50 rounded-2xl shadow-[0_0_15px_rgba(239,68,68,0.2)]">
+                            {/* Corner Accents */}
+                            <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-red-500 -mt-[2px] -ml-[2px] rounded-tl-xl" />
+                            <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-red-500 -mt-[2px] -mr-[2px] rounded-tr-xl" />
+                            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-red-500 -mb-[2px] -ml-[2px] rounded-bl-xl" />
+                            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-red-500 -mb-[2px] -mr-[2px] rounded-br-xl" />
+
+                            {/* Label */}
+                            <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-red-500/80 px-2 py-0.5 rounded text-[10px] font-bold text-white tracking-widest uppercase">
+                                Active Zone
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Error display */}
                 {error && (
                     <div className="absolute bottom-3 left-3 right-3 p-3 rounded-lg bg-red-500/20 border border-red-400/30">
@@ -173,53 +189,16 @@ export function ASLInput({ onTranslation, isEnabled = true }: ASLInputProps) {
                 {isDetecting && (
                     <button
                         onClick={toggleDetection}
-                        className="absolute bottom-3 right-3 p-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 transition-colors"
-                        title="Stop ASL detection"
+                        className="absolute bottom-3 right-3 flex items-center gap-2 px-4 py-2 rounded-full bg-red-500/80 hover:bg-red-600 border border-white/20 transition-all shadow-lg backdrop-blur-sm group"
+                        title="Turn off camera"
                     >
-                        <CameraOff className="w-4 h-4 text-white/70" />
+                        <CameraOff className="w-4 h-4 text-white group-hover:scale-110 transition-transform" />
+                        <span className="text-sm font-bold text-white">Turn Camera Off</span>
                     </button>
                 )}
             </div>
 
-            {/* Translation output */}
-            {lastTranslation && lastTranslation.confidence !== 'unclear' && (
-                <div className="mt-3 p-4 rounded-xl bg-gradient-to-r from-purple-500/20 to-emerald-500/20 border border-purple-400/20 animate-in fade-in slide-in-from-bottom duration-300">
-                    <div className="flex items-start gap-3">
-                        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-purple-500/30 flex items-center justify-center">
-                            <MessageSquare className="w-4 h-4 text-purple-300" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">
-                                    Patient (ASL)
-                                </span>
-                                <span className="text-xs text-white/40">{lastTranslation.timestamp}</span>
-                                {lastTranslation.confidence === 'high' && (
-                                    <Sparkles className="w-3 h-3 text-emerald-400" />
-                                )}
-                            </div>
-                            <p className="text-lg font-semibold text-white leading-snug">
-                                {lastTranslation.translation}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Recent translations */}
-            {translationHistory.length > 1 && (
-                <div className="mt-2 space-y-1 max-h-24 overflow-y-auto scrollbar-hide">
-                    {translationHistory.slice(1, 4).map((item, index) => (
-                        <div
-                            key={index}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 text-sm text-white/40"
-                        >
-                            <span className="text-white/60">{item.translation}</span>
-                            <span className="text-white/30 ml-2 text-xs">{item.timestamp}</span>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {/* Removed internal translation overlay to prevent obstruction */}
         </div>
     );
 }

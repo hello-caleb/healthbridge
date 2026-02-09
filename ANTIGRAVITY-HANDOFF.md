@@ -7,6 +7,36 @@ HealthBridge is a healthcare communication tool for Deaf/Hard-of-Hearing patient
 
 ---
 
+## Working Directory
+
+```bash
+cd /Users/calebhunter/Projects/health-bridge
+```
+
+This is the project root. All paths in this document are relative to this directory.
+
+---
+
+## Git Branch Strategy
+
+**Work on a feature branch, not main:**
+
+```bash
+# At the start of your session
+git checkout -b antigravity/phase-abc-implementation
+git push -u origin antigravity/phase-abc-implementation
+
+# After each task, push to this branch
+git push
+
+# When ALL tasks complete, create a PR
+gh pr create --title "Antigravity: Complete Phases A, B, C" --body "All 46 tasks implemented and tested."
+```
+
+This protects main from incomplete work and allows human review before merge.
+
+---
+
 ## CRITICAL: AUTONOMOUS OPERATION MODE
 
 **YOU ARE RUNNING AUTONOMOUSLY. DO NOT STOP. DO NOT ASK FOR PERMISSION.**
@@ -242,6 +272,91 @@ Use labeled datasets with ground truth:
 - How2Sign dataset: https://how2sign.github.io/
 
 Create test files with pre-recorded videos and expected translations.
+
+---
+
+## Creating Test Fixtures (REQUIRED)
+
+Since no test data exists yet, YOU must create mock data for testing. Here's how:
+
+### 1. Mock Hand Landmark Data
+Create `src/lib/mediapipe/__fixtures__/mock-landmarks.ts`:
+```typescript
+// Mock MediaPipe hand landmark output for testing
+export const mockHandLandmarks = {
+  // 21 landmarks per hand, each with x, y, z coordinates (0-1 normalized)
+  singleHand: [
+    { x: 0.5, y: 0.5, z: 0 },    // WRIST
+    { x: 0.45, y: 0.45, z: 0 },  // THUMB_CMC
+    // ... (generate 21 points)
+  ],
+  twoHands: {
+    left: [/* 21 landmarks */],
+    right: [/* 21 landmarks */]
+  }
+};
+
+// Different sign configurations
+export const mockSignConfigurations = {
+  openPalm: { /* landmarks for open palm */ },
+  fist: { /* landmarks for closed fist */ },
+  pointing: { /* landmarks for pointing gesture */ }
+};
+```
+
+### 2. Mock Gemini API Responses
+Create `src/lib/asl/__fixtures__/mock-gemini-responses.ts`:
+```typescript
+export const mockGeminiTranslations = {
+  hello: {
+    input: 'base64-encoded-frames-placeholder',
+    expectedOutput: 'Hello',
+    confidence: 0.95
+  },
+  thankyou: {
+    input: 'base64-encoded-frames-placeholder',
+    expectedOutput: 'Thank you',
+    confidence: 0.88
+  },
+  // Add more common signs
+};
+```
+
+### 3. Mock Audio Transcription
+Create `src/lib/audio/__fixtures__/mock-transcription.ts`:
+```typescript
+export const mockTranscriptions = {
+  doctorGreeting: {
+    audio: 'mock-audio-blob',
+    expectedText: 'Good morning, how are you feeling today?',
+    speaker: 'doctor'
+  },
+  medicalExplanation: {
+    audio: 'mock-audio-blob',
+    expectedText: 'Your blood pressure is slightly elevated at 140 over 90.',
+    speaker: 'doctor',
+    medicalTerms: ['blood pressure', 'elevated']
+  }
+};
+```
+
+### 4. Using Mocks in Tests
+```typescript
+// In your test file
+import { mockHandLandmarks } from './__fixtures__/mock-landmarks';
+import { vi } from 'vitest';
+
+// Mock the MediaPipe detector
+vi.mock('@mediapipe/tasks-vision', () => ({
+  HandLandmarker: {
+    createFromOptions: vi.fn().mockResolvedValue({
+      detect: vi.fn().mockReturnValue({ landmarks: mockHandLandmarks.singleHand })
+    })
+  }
+}));
+```
+
+**IMPORTANT**: Create these fixtures BEFORE writing the implementation tests. Unit tests should use mocks, not real API calls.
 
 ---
 

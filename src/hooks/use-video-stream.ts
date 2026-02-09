@@ -31,7 +31,11 @@ export function useVideoStream() {
     useEffect(() => {
         if (isActive && streamRef.current && videoRef.current) {
             videoRef.current.srcObject = streamRef.current;
-            videoRef.current.play().catch(console.error);
+            videoRef.current.play().catch(e => {
+                if (e.name !== 'AbortError' && !e.toString().includes('interrupted')) {
+                    console.error(e);
+                }
+            });
         }
     }, [isActive]);
 

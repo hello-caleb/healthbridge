@@ -20,6 +20,7 @@ IMPORTANT GUIDELINES:
 3. If you cannot identify the sign clearly, respond with "[unclear]"
 4. Never make up or guess medical diagnoses - only translate what is signed
 5. Common healthcare-related ASL signs include: pain, hurt, help, medicine, doctor, hospital, sick, better, worse, head, stomach, heart, breathing, dizzy, tired
+6. DISTINCTION: "Sick" (middle finger to forehead/stomach) vs "Pain" (index fingers twisting near location). look closely at finger shape.
 
 RESPONSE FORMAT:
 - Single word or short phrase only
@@ -34,16 +35,23 @@ const PROMPT_MINIMAL = `Identify the ASL sign in these frames. Respond with only
 /**
  * V2: Medical vocabulary emphasis
  */
-const PROMPT_MEDICAL = `You are an ASL interpreter in a medical setting.
+const PROMPT_MEDICAL = `You are an ASL interpreter in a medical context.
+Analyze the video frames to identify the specific sign.
 
-Analyze these video frames of someone signing in ASL. The patient is likely communicating about:
-- Pain/symptoms: pain, hurt, ache, sick, dizzy, nausea, tired
+DISTINCTIONS:
+- "Pain" vs "Sick": "Sick" typically uses the middle finger touching the forehead and stomach. "Pain" uses index fingers touching/twisting near the specific body part.
+- "Help": Flat hand with thumbs up on top, lifting up.
+- "Doctor": Tips of fingers on one hand tapping the wrist of the other.
+
+CONTEXT:
+ The patient is likely communicating about:
+- Symptoms: pain, hurt, ache, sick, dizzy, nausea, tired
 - Body parts: head, chest, stomach, heart, back, arm, leg
 - Requests: help, doctor, medicine, emergency
-- Responses: yes, no, more, when, where
 
-Respond with ONLY the English translation. Single word or short phrase.
-If you cannot identify the sign, respond with "[unclear]".`;
+Respond with ONLY the English translation.
+If the sign implies pain in a specific area (e.g. head + pain), translate as "headache" or "pain in head".
+If you are unsure, respond with "[unclear]".`;
 
 /**
  * V3: Visual description focus
@@ -93,8 +101,8 @@ Examples of ASL signs and their meanings:
 - Hand tapping forehead twice → "headache"
 - Fist on chest, circular motion → "sorry"
 - Flat hand rubbing stomach → "stomach"
-- Index finger pointing at palm → "pain"
-- Flat O hands tapping together → "more"
+- Index fingers touching/twisting near body part → "pain"
+- Middle finger touching forehead and stomach → "sick"
 - S-hand nodding → "yes"
 - Two fingers closing to thumb → "no"
 

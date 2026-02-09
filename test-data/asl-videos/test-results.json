@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-02-09T21:16:39.824Z",
+  "total_tests": 1,
+  "passed": 1,
+  "failed": 0,
+  "accuracy": 0.8,
+  "average_latency_ms": 1052,
+  "results": [
+    {
+      "id": "sign_001",
+      "sign": "pain",
+      "expected": "pain",
+      "actual": "Sick",
+      "score": 0.8,
+      "match_type": "alternate",
+      "latency_ms": 1052
+    }
+  ],
+  "by_category": {
+    "symptom": {
+      "accuracy": 0.8,
+      "count": 1
+    }
+  },
+  "by_priority": {
+    "high": {
+      "accuracy": 0.8,
+      "count": 1
+    }
+  },
+  "thresholds": {
+    "minimum": 0.6,
+    "target": 0.8,
+    "excellent": 0.9,
+    "status": "target"
+  }
+}

@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { HandFrame } from "@/hooks/use-hand-landmarker";
 import { selectKeyFramesAdaptive, getSelectedFrames } from "./adaptive-frame-select";
+import { ApiUsageTracker } from "./api-usage-tracker";
+import { getPrompt, parseResponse, PromptVariant } from "./asl-prompts";
 
 const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 const genAI = new GoogleGenerativeAI(API_KEY);
@@ -10,40 +12,45 @@ const genAI = new GoogleGenerativeAI(API_KEY);
  * Adjust these settings to optimize accuracy vs. speed tradeoff
  */
 export interface ASLConfig {
-    /** Number of frames to send to Gemini (5, 8, 10, or 15) */
-    maxFrames: 5 | 8 | 10 | 15;
+    /** Number of frames to send to Gemini */
+    maxFrames: number;
     /** Gemini model to use */
-    model: 'gemini-2.0-flash' | 'gemini-2.5-flash' | 'gemini-2.5-pro';
+    model: 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
     /** JPEG quality (0-1) for frame compression */
     imageQuality: number;
     /** Enable verbose logging */
     verbose: boolean;
     /** Use adaptive (motion-based) frame selection instead of even distribution */
     useAdaptiveSelection: boolean;
+    /** Prompt strategy to use */
+    promptVariant: PromptVariant;
 }
 
 export const DEFAULT_ASL_CONFIG: ASLConfig = {
-    maxFrames: 8, // Increased from 5 for better accuracy
-    model: 'gemini-2.0-flash',
+    maxFrames: 12, // Increased to 12 for better sampling of dynamic signs
+    model: 'gemini-3-flash-preview',
     imageQuality: 0.7,
     verbose: false,
-    useAdaptiveSelection: true, // Use motion-based frame selection
+    useAdaptiveSelection: true,
+    promptVariant: 'baseline',
 };
 
 export const ACCURACY_ASL_CONFIG: ASLConfig = {
-    maxFrames: 15,
-    model: 'gemini-2.5-flash',
+    maxFrames: 20, // High frame count for complex fingerspelling
+    model: 'gemini-3-pro-preview',
     imageQuality: 0.85,
     verbose: true,
     useAdaptiveSelection: true,
+    promptVariant: 'confidence',
 };
 
 export const FAST_ASL_CONFIG: ASLConfig = {
     maxFrames: 5,
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3-flash-preview',
     imageQuality: 0.6,
     verbose: false,
-    useAdaptiveSelection: false, // Even distribution for speed
+    useAdaptiveSelection: false,
+    promptVariant: 'minimal',
 };
 
 // Current active configuration - can be changed at runtime
@@ -169,26 +176,14 @@ export function getRateLimitStatus(): {
 }
 
 // System prompt for ASL interpretation
-const ASL_SYSTEM_PROMPT = `You are an ASL (American Sign Language) interpreter assistant for a healthcare communication app.
-
-Your task is to analyze video frames showing a person signing in ASL and translate their signs to English.
-
-IMPORTANT GUIDELINES:
-1. Focus on identifying the ASL sign being made based on hand positions, shapes, and movements
-2. If you can identify the sign, respond with JUST the English word or short phrase
-3. If you cannot identify the sign clearly, respond with "[unclear]"
-4. Never make up or guess medical diagnoses - only translate what is signed
-5. Common healthcare-related ASL signs include: pain, hurt, help, medicine, doctor, hospital, sick, better, worse, head, stomach, heart, breathing, dizzy, tired
-
-RESPONSE FORMAT:
-- Single word or short phrase only
-- No explanations or caveats
-- Example responses: "pain", "my head hurts", "I need help", "[unclear]"`;
+// Now using dynamic prompts from asl-prompts.ts
+// const ASL_SYSTEM_PROMPT = ... (removed)
 
 export interface ASLTranslationResult {
     translation: string;
     confidence: 'high' | 'medium' | 'low' | 'unclear';
     timestamp: string;
+    description?: string; // New field for CoT
     /** Latency in milliseconds */
     latencyMs?: number;
     /** Number of frames used */
@@ -240,8 +235,22 @@ export async function translateASLFrames(
         };
     }
 
-    // Record this request for rate limiting
+    // Check daily usage limit
+    if (!ApiUsageTracker.checkAvailability('asl')) {
+        console.warn('⚠️ Daily API limit reached');
+        return {
+            translation: '[daily limit reached]',
+            confidence: 'unclear',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            latencyMs: Date.now() - startTime,
+            framesUsed: 0,
+            modelUsed: config.model,
+        };
+    }
+
+    // Record this request (both in-memory rate limiter and persistent tracker)
     recordRequest();
+    ApiUsageTracker.increment('asl');
 
     try {
         // Select key frames using adaptive or even distribution
@@ -265,11 +274,10 @@ export async function translateASLFrames(
         }));
 
         // Create the prompt
-        const prompt = `${ASL_SYSTEM_PROMPT}
+        const systemPrompt = getPrompt(config.promptVariant || 'baseline');
+        const prompt = `${systemPrompt}
 
-I'm showing you ${keyFrames.length} frames from a video of someone signing in ASL. The frames are in chronological order showing the progression of the sign.
-
-What ASL sign or phrase is being made? Remember to respond with just the English translation.`;
+I'm showing you ${keyFrames.length} frames from a video of someone signing in ASL. The frames are in chronological order showing the progression of the sign.`;
 
         // Call Gemini Vision
         const result = await model.generateContent([
@@ -281,25 +289,52 @@ What ASL sign or phrase is being made? Remember to respond with just the English
         const text = response.text().trim();
         const latencyMs = Date.now() - startTime;
 
-        // Determine confidence based on response
-        let confidence: 'high' | 'medium' | 'low' | 'unclear' = 'medium';
-        if (text === '[unclear]' || text.toLowerCase().includes('unclear') || text.toLowerCase().includes('cannot')) {
+        // Parse response based on prompt variant
+        const parsed = parseResponse(config.promptVariant || 'baseline', text);
+
+        const translation = parsed.translation || '[unclear]';
+        const description = parsed.observation || '';
+        let confidence: 'high' | 'medium' | 'low' | 'unclear' =
+            parsed.confidence ? (parsed.confidence >= 4 ? 'high' : parsed.confidence >= 2 ? 'medium' : 'low') : 'medium';
+
+        // Try to recover JSON if the prompt was the original baseline (which asks for JSON)
+        // This is back-compat for the original hardcoded prompt style if we ever use it
+        if (config.promptVariant === 'baseline' && text.startsWith('{')) {
+            try {
+                const json = JSON.parse(text);
+                if (json.sign) {
+                    return {
+                        translation: json.sign,
+                        confidence: json.confidence || 'medium',
+                        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        description: json.description,
+                        latencyMs,
+                        framesUsed: keyFrames.length,
+                        modelUsed: config.model,
+                    };
+                }
+            } catch (e) {
+                // ignore json parse error
+            }
+        }
+
+        // Additional safety checks
+        if (translation.toLowerCase().includes('unclear')) {
             confidence = 'unclear';
-        } else if (text.split(' ').length <= 3) {
-            confidence = 'high'; // Short, confident responses
         }
 
         if (config.verbose) {
-            console.log(`🤟 ASL Translation: "${text}" (confidence: ${confidence}, ${keyFrames.length} frames, ${latencyMs}ms, ${config.model})`);
+            console.log(`🤟 ASL: "${translation}" (${confidence}) - ${description}`);
         }
 
         // Mark request complete for rate limiting
         requestComplete();
 
         return {
-            translation: text,
+            translation,
             confidence,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description, // Return description for debugging/UI
             latencyMs,
             framesUsed: keyFrames.length,
             modelUsed: config.model,

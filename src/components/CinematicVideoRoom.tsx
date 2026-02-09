@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Video, Mic, Power, MicOff, ExternalLink, RefreshCw, Wifi, WifiOff, Settings, Shield, Hand, Volume2 } from 'lucide-react';
+import { Video, Mic, Power, MicOff, ExternalLink, RefreshCw, Wifi, WifiOff, Settings, Shield, Hand, Volume2, Play, RotateCcw, Sparkles, ScanLine } from 'lucide-react';
 import { useGeminiClient, MedicalTerm } from '@/hooks/use-gemini-client';
 import { useVideoStream } from '@/hooks/use-video-stream';
 import { useSpeakerDiarization, getSpeakerStyles } from '@/hooks/use-speaker-diarization';
 import { useSessionTimeout } from '@/hooks/use-session-timeout';
+import { useDemoMode } from '@/hooks/use-demo-mode';
 import { DoctorVideoRoom } from '@/components/DoctorVideoRoom';
 import { SessionTimeoutModal } from '@/components/SessionTimeoutModal';
 import { MedicalTermsCarousel } from '@/components/MedicalTermsCarousel';
 import { ASLInput } from '@/components/ASLInput';
+import { MedicalObjectScanner } from '@/components/MedicalObjectScanner';
 import { ASLTranslationResult } from '@/lib/asl-translation-service';
 
 function CinematicContent() {
@@ -18,12 +20,40 @@ function CinematicContent() {
     const { videoRef, isActive: isVideoActive, startVideo, stopVideo } = useVideoStream();
     const speakerSegments = useSpeakerDiarization(transcript);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [showScanner, setShowScanner] = useState(false);
+
+    // Demo mode detection via URL param
+    const [isDemoMode, setIsDemoMode] = useState(false);
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const params = new URLSearchParams(window.location.search);
+            setIsDemoMode(params.get('demo') === 'true');
+        }
+    }, []);
+
+    // Demo mode hook
+    const {
+        isPlaying: isDemoPlaying,
+        progress: demoProgress,
+        transcript: demoTranscript,
+        medicalTerms: demoMedicalTerms,
+        startDemo,
+        stopDemo,
+        restartDemo,
+    } = useDemoMode({
+        enabled: isDemoMode,
+        onComplete: () => console.log('Demo complete!'),
+    });
 
     // Input mode: 'audio' (speech) or 'asl' (sign language)
     const [inputMode, setInputMode] = useState<'audio' | 'asl'>('audio');
 
     // ASL translation state
     const [aslTranslations, setAslTranslations] = useState<ASLTranslationResult[]>([]);
+
+    // Use demo data when in demo mode, otherwise use live data
+    const displayTranscript = isDemoMode ? demoTranscript : speakerSegments;
+    const displayMedicalTerms = isDemoMode ? demoMedicalTerms : medicalTerms;
 
     // Handle ASL translation
     const handleASLTranslation = (result: ASLTranslationResult) => {
@@ -76,8 +106,8 @@ function CinematicContent() {
         }
     };
 
-    // Transform medical terms for carousel
-    const carouselTerms = medicalTerms.map((term: MedicalTerm) => ({
+    // Transform medical terms for carousel (use demo terms in demo mode)
+    const carouselTerms = displayMedicalTerms.map((term: MedicalTerm) => ({
         term: term.term,
         definition: term.definition,
         timestamp: term.timestamp,
@@ -90,6 +120,13 @@ function CinematicContent() {
                 timeRemaining={timeRemaining}
                 onContinue={dismissWarning}
             />
+
+            {showScanner && (
+                <MedicalObjectScanner
+                    onClose={() => setShowScanner(false)}
+                    onResult={(analysis) => console.log('Scanned:', analysis)}
+                />
+            )}
 
             <div className="h-screen w-screen overflow-hidden bg-[#0a0a0a] text-white font-sans flex flex-col">
                 {/* Organic background shapes */}
@@ -107,8 +144,48 @@ function CinematicContent() {
                     </div>
                 )}
 
+                {/* Demo Mode Banner */}
+                {isDemoMode && (
+                    <div className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-purple-600/90 via-indigo-600/90 to-purple-600/90 backdrop-blur-sm text-white py-3 px-4">
+                        <div className="max-w-6xl mx-auto flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <Sparkles className="h-5 w-5 text-yellow-300" />
+                                <span className="font-bold">Demo Mode</span>
+                                <span className="text-white/70 text-sm">Cardiology Consultation Simulation</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {/* Progress bar */}
+                                <div className="w-48 h-2 bg-white/20 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-white/80 rounded-full transition-all duration-300"
+                                        style={{ width: `${demoProgress}%` }}
+                                    />
+                                </div>
+                                {/* Controls */}
+                                {!isDemoPlaying ? (
+                                    <button
+                                        onClick={startDemo}
+                                        className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/20 hover:bg-white/30 font-medium text-sm transition-colors"
+                                    >
+                                        <Play className="h-4 w-4" />
+                                        Start Demo
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={restartDemo}
+                                        className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/20 hover:bg-white/30 font-medium text-sm transition-colors"
+                                    >
+                                        <RotateCcw className="h-4 w-4" />
+                                        Restart
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Top Navigation Bar */}
-                <header className={`relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/5 ${isReconnecting ? 'mt-12' : ''}`}>
+                <header className={`relative z-20 flex items-center justify-between px-6 py-4 border-b border-white/5 ${isReconnecting || isDemoMode ? 'mt-12' : ''}`}>
                     <div className="flex items-center gap-4">
                         <h1 className="text-xl font-bold tracking-tight">
                             <span className="text-white">Health</span>
@@ -117,42 +194,59 @@ function CinematicContent() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {/* Scanner Button */}
+                        <button
+                            onClick={() => setShowScanner(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-all font-bold text-xs uppercase tracking-wider"
+                        >
+                            <ScanLine className="h-4 w-4" />
+                            Scan Object
+                        </button>
+
                         {/* Input Mode Toggle */}
                         <div className="flex items-center rounded-full bg-white/5 border border-white/10 p-1">
                             <button
                                 onClick={() => setInputMode('audio')}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-                                    inputMode === 'audio'
-                                        ? 'bg-emerald-500 text-white'
-                                        : 'text-white/50 hover:text-white/70'
-                                }`}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${inputMode === 'audio'
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'text-white/50 hover:text-white/70'
+                                    }`}
                             >
                                 <Volume2 className="h-3.5 w-3.5" />
                                 Audio
                             </button>
                             <button
                                 onClick={() => setInputMode('asl')}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${
-                                    inputMode === 'asl'
-                                        ? 'bg-purple-500 text-white'
-                                        : 'text-white/50 hover:text-white/70'
-                                }`}
+                                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-all ${inputMode === 'asl'
+                                    ? 'bg-purple-500 text-white'
+                                    : 'text-white/50 hover:text-white/70'
+                                    }`}
                             >
                                 <Hand className="h-3.5 w-3.5" />
                                 ASL
                             </button>
                         </div>
 
+
                         {/* Connection status */}
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${isConnected
+                        {isDemoMode ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border bg-purple-500/10 border-purple-500/30 text-purple-400">
+                                <Sparkles className="h-4 w-4" />
+                                <span className="text-xs font-bold uppercase tracking-wider">
+                                    {isDemoPlaying ? 'Playing' : 'Demo Ready'}
+                                </span>
+                            </div>
+                        ) : (
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${isConnected
                                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                                 : 'bg-red-500/10 border-red-500/30 text-red-400'
-                            }`}>
-                            {isConnected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
-                            <span className="text-xs font-bold uppercase tracking-wider">
-                                {isConnected ? 'Connected' : 'Offline'}
-                            </span>
-                        </div>
+                                }`}>
+                                {isConnected ? <Wifi className="h-4 w-4" /> : <WifiOff className="h-4 w-4" />}
+                                <span className="text-xs font-bold uppercase tracking-wider">
+                                    {isConnected ? 'Connected' : 'Offline'}
+                                </span>
+                            </div>
+                        )}
 
                         {/* Security indicator */}
                         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-white/50">
@@ -169,8 +263,8 @@ function CinematicContent() {
                         <button
                             onClick={handleToggleConnect}
                             className={`flex items-center gap-2 px-5 py-2 rounded-full font-bold text-sm transition-all ${isConnected
-                                    ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
-                                    : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                                ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
+                                : 'bg-emerald-500 hover:bg-emerald-600 text-white'
                                 }`}
                         >
                             <Power className="h-4 w-4" />
@@ -192,7 +286,26 @@ function CinematicContent() {
                     <section className="relative flex-[2] flex flex-col min-w-0">
                         {/* Main Video (Doctor) */}
                         <div className="relative flex-1 rounded-3xl overflow-hidden bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-                            {livekitToken ? (
+                            {isDemoMode ? (
+                                /* Demo Mode: Simulated doctor video */
+                                <div className="flex h-full items-center justify-center bg-gradient-to-br from-indigo-900/20 to-purple-900/20">
+                                    <div className="text-center">
+                                        <div className="w-32 h-32 mx-auto mb-4 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center border-2 border-white/10">
+                                            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center">
+                                                <span className="text-4xl font-bold text-white/80">DS</span>
+                                            </div>
+                                        </div>
+                                        <p className="text-xl font-bold text-white/90">Dr. Sarah Smith</p>
+                                        <p className="text-sm text-white/50 mt-1">Cardiologist</p>
+                                        {isDemoPlaying && (
+                                            <div className="mt-4 flex items-center justify-center gap-2">
+                                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                <span className="text-xs text-emerald-400 font-medium">Speaking...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : livekitToken ? (
                                 <DoctorVideoRoom
                                     token={livekitToken}
                                     serverUrl={LIVEKIT_URL}
@@ -233,8 +346,8 @@ function CinematicContent() {
                                 </a>
                             </div>
 
-                            {/* Picture-in-Picture (Patient) - Audio Mode */}
-                            {inputMode === 'audio' && (
+                            {/* Picture-in-Picture (Patient) - Audio Mode (hidden in demo mode) */}
+                            {inputMode === 'audio' && !isDemoMode && (
                                 <div className="absolute bottom-4 right-4 w-48 h-36 rounded-2xl overflow-hidden bg-black/50 border border-white/10 shadow-2xl">
                                     {isVideoActive ? (
                                         <video
@@ -262,8 +375,8 @@ function CinematicContent() {
                                                 onClick={startAudio}
                                                 disabled={isRecording}
                                                 className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${isRecording
-                                                        ? 'bg-red-500/30 text-red-400'
-                                                        : 'bg-white/10 hover:bg-white/20 text-white/70'
+                                                    ? 'bg-red-500/30 text-red-400'
+                                                    : 'bg-white/10 hover:bg-white/20 text-white/70'
                                                     }`}
                                             >
                                                 {isRecording ? <Mic className="h-3 w-3 animate-pulse" /> : <MicOff className="h-3 w-3" />}
@@ -271,8 +384,8 @@ function CinematicContent() {
                                             <button
                                                 onClick={isVideoActive ? stopVideo : startVideo}
                                                 className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-bold transition-colors ${isVideoActive
-                                                        ? 'bg-emerald-500/30 text-emerald-400'
-                                                        : 'bg-white/10 hover:bg-white/20 text-white/70'
+                                                    ? 'bg-emerald-500/30 text-emerald-400'
+                                                    : 'bg-white/10 hover:bg-white/20 text-white/70'
                                                     }`}
                                             >
                                                 <Video className="h-3 w-3" />
@@ -282,8 +395,8 @@ function CinematicContent() {
                                 </div>
                             )}
 
-                            {/* ASL Input Panel - ASL Mode */}
-                            {inputMode === 'asl' && (
+                            {/* ASL Input Panel - ASL Mode (hidden in demo mode) */}
+                            {inputMode === 'asl' && !isDemoMode && (
                                 <div className="absolute bottom-4 right-4 w-72 h-56 rounded-2xl overflow-hidden border border-purple-500/30 shadow-2xl bg-black/30 backdrop-blur-sm">
                                     <ASLInput
                                         onTranslation={handleASLTranslation}
@@ -305,7 +418,11 @@ function CinematicContent() {
                                         Live Transcription
                                     </h2>
                                 </div>
-                                {isRecording && (
+                                {isDemoMode && isDemoPlaying ? (
+                                    <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold animate-pulse">
+                                        DEMO
+                                    </span>
+                                ) : isRecording && (
                                     <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold animate-pulse">
                                         LISTENING
                                     </span>
@@ -317,36 +434,49 @@ function CinematicContent() {
                                 ref={scrollRef}
                                 className="flex-1 overflow-y-auto p-5 space-y-4"
                             >
-                                {speakerSegments.length === 0 && aslTranslations.length === 0 ? (
+                                {displayTranscript.length === 0 && aslTranslations.length === 0 ? (
                                     <p className="text-center text-white/20 italic mt-8">
-                                        {inputMode === 'asl'
-                                            ? 'Sign in ASL - translations will appear here...'
-                                            : 'Transcription will appear here...'}
+                                        {isDemoMode
+                                            ? 'Click "Start Demo" to begin the simulation...'
+                                            : inputMode === 'asl'
+                                                ? 'Sign in ASL - translations will appear here...'
+                                                : 'Transcription will appear here...'}
                                     </p>
                                 ) : (
                                     <>
-                                        {/* Audio transcription segments */}
-                                        {speakerSegments.map((segment, index) => {
+                                        {/* Audio/ASL transcription segments */}
+                                        {displayTranscript.map((segment, index) => {
                                             const isDoctor = segment.speaker === 'doctor';
-                                            const isNewest = index === speakerSegments.length - 1;
+                                            const isASL = segment.inputType === 'asl';
+                                            const isNewest = index === displayTranscript.length - 1;
 
                                             return (
                                                 <div
                                                     key={`speech-${index}`}
-                                                    className={`animate-in fade-in slide-in-from-bottom duration-300`}
+                                                    className={`animate-in fade-in slide-in-from-bottom duration-300 ${isASL ? 'border-l-2 border-purple-500/50 pl-3' : ''}`}
                                                 >
                                                     <div className="flex items-center gap-2 mb-1">
-                                                        <span className={`text-xs font-bold uppercase tracking-wider ${isDoctor ? 'text-blue-400' : 'text-emerald-400'
+                                                        {isASL && <Hand className="w-3 h-3 text-purple-400" />}
+                                                        <span className={`text-xs font-bold uppercase tracking-wider ${isASL
+                                                            ? 'text-purple-400'
+                                                            : isDoctor
+                                                                ? 'text-blue-400'
+                                                                : 'text-emerald-400'
                                                             }`}>
-                                                            {isDoctor ? 'Doctor' : 'Patient'}
+                                                            {isDoctor ? 'Doctor' : isASL ? 'Patient (ASL)' : 'Patient'}
                                                         </span>
                                                         {segment.timestamp && (
                                                             <span className="text-xs text-white/30">{segment.timestamp}</span>
                                                         )}
+                                                        {isASL && (
+                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 font-bold">
+                                                                ✋ Sign
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <p className={`text-lg leading-relaxed font-medium transition-all duration-500 ${isNewest
-                                                            ? 'text-white illuminated-text'
-                                                            : 'text-white/60'
+                                                        ? 'text-white illuminated-text'
+                                                        : 'text-white/60'
                                                         }`}>
                                                         {segment.text}
                                                     </p>
@@ -369,18 +499,39 @@ function CinematicContent() {
                                                             Patient (ASL)
                                                         </span>
                                                         <span className="text-xs text-white/30">{translation.timestamp}</span>
-                                                        {translation.confidence === 'high' && (
-                                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">
-                                                                ✓
+
+                                                        {/* Confidence Badge */}
+                                                        {translation.confidence !== 'unclear' && (
+                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${translation.confidence === 'high' ? 'bg-emerald-500/20 text-emerald-400' :
+                                                                translation.confidence === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                                                                    'bg-red-500/20 text-red-400'
+                                                                }`}>
+                                                                {Math.round((translation.confidence === 'high' ? 0.9 : translation.confidence === 'medium' ? 0.7 : 0.4) * 100)}%
+                                                            </span>
+                                                        )}
+
+                                                        {/* Latency (only for newest) */}
+                                                        {isNewest && translation.latencyMs && (
+                                                            <span className="text-[10px] text-white/20">
+                                                                {translation.latencyMs}ms
                                                             </span>
                                                         )}
                                                     </div>
+
+                                                    {/* Main Translation */}
                                                     <p className={`text-lg leading-relaxed font-medium transition-all duration-500 ${isNewest
-                                                            ? 'text-white illuminated-text'
-                                                            : 'text-white/60'
+                                                        ? 'text-white illuminated-text'
+                                                        : 'text-white/60'
                                                         }`}>
                                                         {translation.translation}
                                                     </p>
+
+                                                    {/* AI Description / Reasoning */}
+                                                    {translation.description && (
+                                                        <p className={`text-xs italic mt-1 ${isNewest ? 'text-white/60' : 'text-white/30'}`}>
+                                                            "{translation.description}"
+                                                        </p>
+                                                    )}
                                                 </div>
                                             );
                                         })}
