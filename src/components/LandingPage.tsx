@@ -173,8 +173,8 @@ export default function LandingPage() {
                         <div>
                             <h4 className="font-bold text-white mb-2">Privacy First</h4>
                             <p className="text-sm text-white/50">
-                                HealthBridge is a communication tool, not a medical device. No health data is stored.
-                                All transcription happens in real-time and is not retained after your session.
+                                HealthBridge is a communication tool that helps translate medical terminology. It does not provide medical advice, diagnoses, or treatment recommendations.
+                                No health data is stored. All transcription happens in real-time and is not retained after your session.
                             </p>
                         </div>
                     </div>
@@ -189,7 +189,7 @@ export default function LandingPage() {
                         <span className="text-sm">HealthBridge • Gemini 3 Hackathon 2026</span>
                     </div>
                     <p className="text-sm text-white/30">
-                        Built with Gemini 2.5 Flash, MediaPipe, and Next.js
+                        Built with Gemini 3, MediaPipe, and Next.js
                     </p>
                 </div>
             </footer>

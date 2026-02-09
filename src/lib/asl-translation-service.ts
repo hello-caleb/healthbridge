@@ -207,6 +207,12 @@ export async function translateASLFrames(
     // Create model with specified configuration
     const model = genAI.getGenerativeModel({
         model: config.model,
+        generationConfig: {
+            // @ts-ignore - Gemini 3 thinkingConfig: LOW for real-time ASL latency
+            thinkingConfig: { thinkingLevel: "LOW" },
+            // @ts-ignore - Gemini 3 mediaResolution: HIGH to capture fine ASL hand movements
+            mediaResolution: "MEDIA_RESOLUTION_HIGH",
+        },
     });
 
     if (!frames || frames.length === 0) {

@@ -18,6 +18,8 @@ const model = genAI.getGenerativeModel({
                 required: ["term", "definition"],
             },
         },
+        // @ts-ignore - Gemini 3 thinkingConfig: supported by API, not yet typed in SDK 0.24.1
+        thinkingConfig: { thinkingLevel: "LOW" },
     },
     // @ts-ignore - dangerouslyAllowBrowser is valid but missing from type definitions in 0.24.1
 }, { dangerouslyAllowBrowser: true });
@@ -93,7 +95,11 @@ export async function analyzeMedicalObject(base64Image: string): Promise<Medical
                         confidence: { type: SchemaType.STRING, format: "enum", enum: ["high", "medium", "low"] }
                     },
                     required: ["name", "purpose", "warnings", "confidence"]
-                }
+                },
+                // @ts-ignore - Gemini 3 thinkingConfig: supported by API, not yet typed in SDK 0.24.1
+                thinkingConfig: { thinkingLevel: "MEDIUM" },
+                // @ts-ignore - Gemini 3 mediaResolution: higher detail for medical object identification
+                mediaResolution: "MEDIA_RESOLUTION_MEDIUM",
             }
         });
 
@@ -130,6 +136,10 @@ export async function queryPatientHistory(question: string, historyContext: stri
         // Use Gemini 3 Pro Preview for advanced reasoning on patient history
         const model = genAI.getGenerativeModel({
             model: "gemini-3-pro-preview",
+            generationConfig: {
+                // @ts-ignore - Gemini 3 thinkingConfig: HIGH for accurate medical history reasoning
+                thinkingConfig: { thinkingLevel: "HIGH" },
+            },
         });
 
         const prompt = `

@@ -536,6 +536,13 @@ export function DoctorDashboard({ onRequestOnboarding }: DoctorDashboardProps) {
                 </div>
             </main>
 
+            {/* Disclaimer */}
+            <div className="border-t border-white/5 px-6 py-2 text-center">
+                <p className="text-[10px] text-white/25 tracking-wide">
+                    HealthBridge is a communication tool that helps translate medical terminology. It does not provide medical advice, diagnoses, or treatment recommendations.
+                </p>
+            </div>
+
             {/* Patient History Modal */}
             <PatientHistoryModal
                 isOpen={showHistoryModal}

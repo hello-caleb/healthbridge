@@ -26,7 +26,7 @@ async function testMedicalObject(imagePath: string) {
 
         // Re-implementing logic here since importing from src/lib might fail due to aliases in ts-node without config
         const visionModel = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
+            model: "gemini-3-flash-preview",
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: {

@@ -545,6 +545,11 @@ function CinematicContent() {
                 {/* Medical Terms Carousel (Bottom) */}
                 <footer className="relative z-10 border-t border-white/5 bg-gradient-to-t from-black/50 to-transparent py-4">
                     <MedicalTermsCarousel terms={carouselTerms} />
+                    <div className="text-center mt-2 px-4">
+                        <p className="text-[10px] text-white/25 tracking-wide">
+                            HealthBridge is a communication tool that helps translate medical terminology. It does not provide medical advice, diagnoses, or treatment recommendations.
+                        </p>
+                    </div>
                 </footer>
             </div>
         </>
