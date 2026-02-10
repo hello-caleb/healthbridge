@@ -1,19 +1,209 @@
 {
-  "timestamp": "2026-02-09T21:16:39.824Z",
-  "total_tests": 1,
+  "timestamp": "2026-02-10T00:15:27.234Z",
+  "total_tests": 20,
   "passed": 1,
-  "failed": 0,
+  "failed": 19,
   "accuracy": 0.8,
-  "average_latency_ms": 1052,
+  "average_latency_ms": 4927,
   "results": [
     {
       "id": "sign_001",
       "sign": "pain",
       "expected": "pain",
-      "actual": "Sick",
+      "actual": "sick",
       "score": 0.8,
       "match_type": "alternate",
-      "latency_ms": 1052
+      "latency_ms": 4927
+    },
+    {
+      "id": "sign_002",
+      "sign": "help",
+      "expected": "help",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: help_01.mp4"
+    },
+    {
+      "id": "sign_003",
+      "sign": "sick",
+      "expected": "sick",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: sick_01.mp4"
+    },
+    {
+      "id": "sign_004",
+      "sign": "doctor",
+      "expected": "doctor",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: doctor_01.mp4"
+    },
+    {
+      "id": "sign_005",
+      "sign": "medicine",
+      "expected": "medicine",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: medicine_01.mp4"
+    },
+    {
+      "id": "sign_006",
+      "sign": "heart",
+      "expected": "heart",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: heart_01.mp4"
+    },
+    {
+      "id": "sign_007",
+      "sign": "chest",
+      "expected": "chest",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: chest_01.mp4"
+    },
+    {
+      "id": "sign_008",
+      "sign": "head",
+      "expected": "head",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: head_01.mp4"
+    },
+    {
+      "id": "sign_009",
+      "sign": "stomach",
+      "expected": "stomach",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: stomach_01.mp4"
+    },
+    {
+      "id": "sign_010",
+      "sign": "dizzy",
+      "expected": "dizzy",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: dizzy_01.mp4"
+    },
+    {
+      "id": "sign_011",
+      "sign": "yes",
+      "expected": "yes",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: yes_01.mp4"
+    },
+    {
+      "id": "sign_012",
+      "sign": "no",
+      "expected": "no",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: no_01.mp4"
+    },
+    {
+      "id": "sign_013",
+      "sign": "more",
+      "expected": "more",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: more_01.mp4"
+    },
+    {
+      "id": "sign_014",
+      "sign": "emergency",
+      "expected": "emergency",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: emergency_01.mp4"
+    },
+    {
+      "id": "sign_015",
+      "sign": "allergic",
+      "expected": "allergic",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: allergic_01.mp4"
+    },
+    {
+      "id": "sign_016",
+      "sign": "breathe",
+      "expected": "breathe",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: breathe_01.mp4"
+    },
+    {
+      "id": "sign_017",
+      "sign": "nausea",
+      "expected": "nausea",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: nausea_01.mp4"
+    },
+    {
+      "id": "sign_018",
+      "sign": "tired",
+      "expected": "tired",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: tired_01.mp4"
+    },
+    {
+      "id": "sign_019",
+      "sign": "when",
+      "expected": "when",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: when_01.mp4"
+    },
+    {
+      "id": "sign_020",
+      "sign": "where",
+      "expected": "where",
+      "actual": null,
+      "score": 0,
+      "match_type": "missing_video",
+      "latency_ms": 0,
+      "error": "Video file not found: where_01.mp4"
     }
   ],
   "by_category": {

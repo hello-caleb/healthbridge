@@ -27,6 +27,10 @@ export const metadata: Metadata = {
     title: "HealthBridge",
     description: "Accessible healthcare communication for DHH patients",
   },
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

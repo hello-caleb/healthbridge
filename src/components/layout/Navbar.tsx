@@ -34,26 +34,11 @@ export default function Navbar() {
             <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2 group">
-                    <div className="relative w-8 h-8 flex items-center justify-center bg-gradient-to-tr from-brand-teal to-brand-violet rounded-lg shadow-lg group-hover:shadow-brand-teal/20 transition-all duration-300">
-                        <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            className="w-5 h-5 text-white"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        >
-                            <path d="M12 2v20M2 12h20" className="opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                            <path d="M4.93 4.93l14.14 14.14" className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-75" />
-                            <path d="M19.07 4.93L4.93 19.07" className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-150" />
-                            <circle cx="12" cy="12" r="3" className="group-hover:scale-0 transition-transform duration-300" />
-                        </svg>
-                        <div className="absolute inset-0 bg-white/20 rounded-lg blur opacity-0 group-hover:opacity-50 transition-opacity duration-500" />
-                    </div>
-                    <span className="text-xl font-bold tracking-tight text-white group-hover:text-white/90 transition-colors">
-                        HealthBridge
-                    </span>
+                    <img
+                        src="/logo-text.png"
+                        alt="HealthBridge Logo"
+                        className="h-8 w-auto object-contain"
+                    />
                 </Link>
 
                 {/* Desktop Links */}
